@@ -1,0 +1,352 @@
+:root {
+    --naap-navy: #1E3A8A;
+    --naap-navy-hover: #172a6b;
+    --naap-gold: #F59E0B;
+    --bg-gray: #f8fafc;
+    --text-dark: #334155;
+    --text-muted: #64748b;
+    --border-light: #e2e8f0;
+}
+
+body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray); display: flex; color: var(--text-dark); min-height: 100vh; }
+
+/* Desktop base wrapper */
+.main-content { 
+    margin-left: 260px; 
+    padding: 40px; 
+    width: calc(100% - 260px); 
+    box-sizing: border-box;
+    height: 100vh;
+    overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
+}
+
+.main-content::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
+}
+
+.page-header { border-bottom: 3px solid var(--naap-gold); margin-bottom: 30px; padding-bottom: 10px; }
+.page-header h1 { color: var(--naap-navy); margin: 0; }
+.page-header p { color: var(--text-muted); margin: 5px 0 0 0; }
+
+.print-header {
+    display: none;
+}
+
+/* SELECTION CARD */
+.selection-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 30px; display: flex; align-items: center; gap: 20px; border-top: 5px solid var(--naap-navy); }
+.selection-card select, .selection-card input { padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 1rem; color: var(--text-dark); outline: none; box-sizing: border-box; }
+.selection-card select:focus, .selection-card input:focus { border-color: var(--naap-navy); }
+.selection-card button { background: var(--naap-navy); color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; white-space: nowrap; height: 46px; }
+.selection-card button:hover { background: var(--naap-navy-hover); }
+
+/* QR PRINT CARD & TRACKER CONTAINER */
+.qr-print-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 30px; border-left: 6px solid var(--naap-gold); position: relative; }
+.btn-print-qr { background: var(--naap-gold); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+.btn-print-qr:hover { background: #d97706; }
+
+.qr-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+.tracker-container { background: white; padding: 50px 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin: 30px 0; position: relative; border-top: 5px solid var(--border-light); }
+.stepper-wrapper { display: flex; justify-content: space-between; position: relative; }
+
+/* --- NEW: Improved Stepper Line --- */
+.stepper-line-bg { 
+    position: absolute; 
+    top: 28px; /* Vertically center on the 56px icon */
+    height: 4px; 
+    background: var(--border-light); 
+    z-index: 0; 
+    border-radius: 2px;
+}
+.stepper-line-progress { height: 100%; transition: width 0.5s ease; border-radius: 2px; }
+
+.step { text-align: center; flex: 1; position: relative; z-index: 1; }
+.step-icon { 
+    width: 56px; 
+    height: 56px; 
+    border-radius: 50%; 
+    background: white; 
+    border: 4px solid var(--border-light); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 24px; 
+    margin: 0 auto 12px; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+    transition: all 0.3s ease;
+    position: relative; /* For z-index */
+    z-index: 1; /* To sit on top of the line */
+}
+.step-label { font-weight: 600; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.step-status { font-size: 0.75rem; font-weight: 800; margin-top: 8px; }
+
+/* Step States */
+.step.completed .step-icon {
+    border-color: #10b981;
+    background-color: #10b981;
+    color: white;
+}
+.step.completed .step-icon::after {
+    content: '✓';
+    font-size: 28px;
+    font-weight: bold;
+}
+.step.completed .step-label { color: var(--text-dark); }
+
+/* Current State but NOT Received (In Transit) */
+.step.current .step-icon { border-color: #f59e0b; background-color: white; border-style: dashed; }
+.step.current .step-label { color: #f59e0b; font-weight: 800; }
+.step.current .step-status { color: #f59e0b; }
+/* Pulsing dot for current step */
+.step.current .step-icon::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background: #f59e0b;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+/* Received State Override */
+.step.current.received .step-icon { border-color: #10b981; background-color: #10b981; border-style: solid; }
+.step.current.received .step-icon::after { background: white; }
+.step.current.received .step-label { color: #10b981; font-weight: 800; }
+.step.current.received .step-status { color: #10b981; }
+
+.step.error .step-icon { border-color: #ef4444; background-color: #ef4444; }
+.step.error .step-icon::after { content: '⚠️'; animation: none; font-size: 24px; }
+.step.error .step-label { color: #ef4444; }
+.step.error .step-status { color: #ef4444; }
+
+.step.pending .step-icon { background-color: #f1f5f9; }
+.step.pending .step-label { color: #94a3b8; }
+
+@keyframes pulse {
+    0% { transform: scale(0.8); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.5; }
+    100% { transform: scale(0.8); opacity: 1; }
+}
+
+.table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-top: 20px; -webkit-overflow-scrolling: touch; }
+.log-table { width: 100%; border-collapse: collapse; min-width: 700px; }
+.log-table th { background: #f1f5f9; color: var(--naap-navy); padding: 15px; text-align: left; font-size: 0.85rem; border-bottom: 2px solid var(--border-light); text-transform: uppercase; white-space: nowrap;}
+.log-table td { padding: 15px; border-bottom: 1px solid var(--border-light); color: var(--text-dark); font-size: 0.9rem; }
+.time-badge { font-family: monospace; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); color: var(--text-muted); white-space: nowrap;}
+.stay-badge { font-weight: bold; color: var(--naap-gold); background: #fffbeb; padding: 4px 8px; border-radius: 4px; border: 1px solid #fef08a; white-space: nowrap;}
+
+.alert-returned { background: #fee2e2; color: #991b1b; padding: 18px; border-radius: 8px; margin-top: 20px; border-left: 5px solid #ef4444; }
+
+.return-remarks-box {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 6px;
+    border: 1px solid #fca5a5;
+}
+.return-remarks-box strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #7f1d1d;
+}
+.return-remarks-box pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.btn-resubmit {
+    display: inline-block;
+    background: var(--naap-gold);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+.btn-resubmit:hover { background: #d97706; }
+/* ========================================= */
+/* MOBILE RESPONSIVE STYLES                  */
+/* ========================================= */
+@media (max-width: 768px) {
+    .main-content { margin-left: 0; width: 100%; padding: 20px 15px; }
+    .page-header h1 { font-size: 1.6rem; }
+    
+    .selection-card { flex-direction: column; align-items: stretch; padding: 20px; }
+    .selection-card select, .selection-card input, .selection-card button { width: 100%; }
+    .selection-card .or-divider { text-align: center; margin: 10px 0; }
+    
+    .qr-print-card { padding: 20px; }
+    .qr-print-card > div:first-child { flex-direction: column; align-items: flex-start; gap: 15px; }
+    .qr-flex-container { flex-direction: column; align-items: flex-start !important; }
+    .qr-flex-container > div:last-child { align-self: center; margin-top: 20px; }
+    .qr-details-grid { grid-template-columns: 1fr; gap: 10px; }
+
+    .tracker-container { overflow-x: auto; padding: 30px 15px; -webkit-overflow-scrolling: touch; }
+    .stepper-wrapper { min-width: 600px; }
+    .stepper-line-bg, .stepper-line-progress { min-width: 540px; top: 56px; }
+}
+
+/* DYNAMIC PRINTING CSS */
+@media print {
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    @page {
+        margin: 0.5cm; /* Reduce page margins */
+    }
+
+    /* General print setup */
+    body {
+        background: white !important;
+        font-size: 10pt; /* Standard print font size */
+    }
+    .sidebar, .mobile-menu-btn, .page-header {
+        display: none !important;
+    }
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    /* Common print header */
+    .print-header {
+        display: block; /* Show in print mode */
+        text-align: center;
+        margin-bottom: 10px; /* Further reduced margin */
+        padding-bottom: 5px; /* Further reduced padding */
+        border-bottom: 2px solid #333;
+    }
+    .print-header h1 { font-size: 11pt; margin: 0; color: #000; }
+    .print-header h2 { font-size: 10pt; margin: 2px 0 0 0; font-weight: normal; color: #333; }
+    .print-header p { font-size: 8pt; margin: 2px 0 0 0; color: #555; }
+
+    /* --- PRINTING QR SLIP ONLY --- */
+    body.print-qr-only {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    body.print-qr-only * {
+        visibility: hidden;
+    }
+    body.print-qr-only .main-content,
+    body.print-qr-only #print-header,
+    body.print-qr-only #print-header *,
+    body.print-qr-only #printable-qr,
+    body.print-qr-only #printable-qr * {
+        visibility: visible;
+    }
+    body.print-qr-only #printable-qr {
+        position: static;
+        box-shadow: none !important; 
+        border: 2px solid #000 !important; /* Add a border for a clean cut-out look */
+        margin: 0 !important; 
+        padding: 10px !important; /* Reduced internal padding */
+        width: 100%;
+        box-sizing: border-box;
+    }
+    body.print-qr-only .btn-print-qr { display: none; }
+    
+    /* Hide the redundant header inside the card */
+    body.print-qr-only #qr-card-header {
+        display: none !important;
+    }
+
+    /* --- Professional Slip Layout --- */
+    body.print-qr-only { font-family: Calibri, 'Segoe UI', sans-serif; }
+
+    /* Re-style the flex container for a more structured print layout */
+    body.print-qr-only .qr-flex-container {
+        display: grid !important;
+        grid-template-columns: 1fr 140px; /* Details column and QR code column */
+        gap: 20px !important;
+        align-items: start !important;
+    }
+
+    /* Style the main Voucher ID */
+    body.print-qr-only div[style*="font-size: 1.8rem"] { /* Voucher ID */
+        font-size: 16pt !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        color: #000 !important;
+        margin-bottom: 20px !important;
+    }
+    body.print-qr-only div[style*="font-size: 0.9rem"] { /* "Voucher ID" label */
+        font-size: 9pt !important;
+        font-weight: 600 !important;
+        color: #555 !important;
+    }
+
+    /* Re-style the details grid into a proper two-column layout */
+    body.print-qr-only .qr-details-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px 20px !important; /* row-gap column-gap */
+    }
+
+    /* Style the labels and values within the grid */
+    body.print-qr-only .qr-details-grid > div {
+        line-height: 1.3 !important;
+        padding-bottom: 8px;
+        border-bottom: 1px dotted #ccc;
+    }
+    body.print-qr-only .qr-details-grid span[style*="font-size: 0.85rem"] { /* Labels */
+        font-size: 8pt !important;
+        font-weight: 600 !important;
+        color: #555 !important;
+    }
+    body.print-qr-only .qr-details-grid span[style*="font-size: 1.05rem"],
+    body.print-qr-only .qr-details-grid span[style*="font-size: 1.2rem"] { /* Values & Amount */
+        font-size: 10pt !important;
+        font-weight: 400 !important;
+        color: #000 !important;
+    }
+    body.print-qr-only .qr-details-grid span[style*="font-weight: 800"] { font-weight: 700 !important; } /* Make amount bold */
+
+    /* Style the QR code container */
+    body.print-qr-only .qr-flex-container > div:last-child {
+        width: 140px !important;
+        padding: 0 !important;
+        background: none !important;
+        border: none !important;
+        text-align: center;
+    }
+    body.print-qr-only .qr-flex-container > div:last-child img {
+        width: 130px !important;
+        height: 130px !important;
+        border: 1px solid #ccc;
+        padding: 5px;
+        background: white;
+    }
+    body.print-qr-only .qr-flex-container > div:last-child div { /* "SCAN TO RECEIVE" label */
+        font-size: 8pt !important;
+        font-weight: 700 !important;
+        color: #000 !important;
+        margin-top: 5px !important;
+    }
+
+    /* --- PRINTING HISTORY ONLY --- */
+    body.print-history-only .selection-card,
+    body.print-history-only .qr-print-card,
+    body.print-history-only .print-history-btn-container,
+    body.print-history-only .tracker-container, /* Hide the visual tracker */
+    body.print-history-only .alert-returned,
+    body.print-history-only .btn-resubmit,
+    body.print-history-only .admin-actions-card {
+        display: none !important;
+    }
+    body.print-history-only .log-table { font-size: 9pt; }
+    body.print-history-only .log-table th, body.print-history-only .log-table td { padding: 8px; }
+    body.print-history-only .time-badge, body.print-history-only .stay-badge { background: none; border: none; padding: 0; }
+    body.print-history-only tr { background-color: transparent !important; }
+}

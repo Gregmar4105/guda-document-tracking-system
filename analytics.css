@@ -1,0 +1,151 @@
+:root {
+    --naap-navy: #1E3A8A;
+    --naap-gold: #f59e0b;
+    --bg-gray: #f1f5f9;
+    --text-dark: #1e293b;
+    --text-muted: #64748b;
+    --border-light: #e2e8f0;
+}
+body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-gray); margin: 0; display: flex; }
+.main-content { margin-left: 260px; padding: 40px; width: calc(100% - 260px); box-sizing: border-box; }
+.container { max-width: 1200px; margin: 0 auto; }
+.page-header { border-bottom: 3px solid var(--naap-gold); margin-bottom: 30px; padding-bottom: 10px; }
+.page-header h1 { color: var(--naap-navy); margin: 0; font-size: 2.2rem; }
+.page-header p { color: var(--text-muted); margin: 5px 0 0 0; font-size: 1.05rem; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; margin-bottom: 40px; }
+.stat-card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+.stat-card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-light); padding-bottom: 15px; margin-bottom: 20px; }
+.stat-card-header h3 { margin: 0; color: var(--naap-navy); font-size: 1.1rem; }
+.stat-card-header select { padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-light); }
+.stat-value { font-size: 2.8rem; font-weight: 700; color: var(--text-dark); text-align: center; }
+.stat-label { font-size: 0.9rem; color: var(--text-muted); margin-top: 5px; text-align: center; }
+.chart-container { position: relative; height: 250px; width: 100%; }
+.list-card ul { list-style: none; padding: 0; margin: 0; }
+.list-card li { padding: 10px 0; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; }
+.list-card li:last-child { border-bottom: none; }
+.list-card li .count { font-weight: bold; color: var(--naap-navy); }
+
+/* Styles for accounting analytics table */
+.table-responsive {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    overflow-x: auto;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+table th, table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+    color: var(--naap-navy);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+table tbody tr:hover {
+    background-color: #f0f9ff;
+}
+table td.office-name {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+table tfoot td {
+    font-weight: bold;
+    background-color: #f8fafc;
+    color: var(--naap-navy);
+}
+
+/* Stat card color variations */
+.stat-card.approved .stat-value { color: #10b981; }
+.stat-card.returned .stat-value { color: #8b5cf6; }
+.stat-card.declined .stat-value { color: #ef4444; }
+
+.print-only-summary {
+    display: none;
+}
+
+.button-group { text-align: right; margin-bottom: 20px; }
+.btn-print {
+    background: var(--naap-gold);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+.btn-print:hover { background: #d97706; }
+
+@media (max-width: 768px) {
+    .main-content { margin-left: 0; width: 100%; padding: 80px 20px 30px 20px; }
+}
+
+/* --- PRINT STYLES --- */
+@media print {
+    body {
+        background: white !important;
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 10pt;
+    }
+    .sidebar, .filter-section, .btn-print, .stat-card-header, .button-group, .stats-grid, .chart-container {
+        display: none !important;
+    }
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 0 !important;
+    }
+    .container { max-width: 100% !important; margin: 0 !important; }
+    .table-responsive { box-shadow: none !important; border: none !important; padding: 0 !important; margin-top: 20px; page-break-inside: avoid; }
+    table th, table td { padding: 8px; }
+    .container .page-header { display: block !important; border: none !important; text-align: left; margin-bottom: 0 !important; }
+    .container:first-of-type > .page-header { display: none !important; }
+    .container .page-header h1 { font-size: 14pt; color: black !important; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 15px !important; }
+    .container .page-header p { display: none; }
+    
+    body::before {
+        content: 'Financial Analytics Report - National Aviation Academy of the Philippines';
+        display: block;
+        text-align: center;
+        font-size: 14pt;
+        font-weight: bold;
+        margin-bottom: 20px;
+        border-bottom: 2px solid black;
+        padding-bottom: 10px;
+    }
+
+    .print-only-summary {
+        display: block;
+        margin-bottom: 30px;
+        page-break-after: avoid;
+    }
+    .print-only-summary h3 {
+        font-size: 12pt;
+        font-weight: bold;
+        color: black;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #666;
+        padding-bottom: 5px;
+    }
+    .print-only-summary table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10pt;
+    }
+    .print-only-summary th, .print-only-summary td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+    }
+    .print-only-summary th { background-color: #f2f2f2; }
+}

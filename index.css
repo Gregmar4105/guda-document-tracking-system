@@ -1,0 +1,132 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 40px 20px;
+    color: #333;
+    background-color: #f4f7f9;
+    box-sizing: border-box;
+}
+.container {
+    max-width: 1000px;
+    margin: auto;
+    background: white;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+}
+.header-section {
+    text-align: center;
+    border-bottom: 2px solid #004a99;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+}
+h1, h2 {
+    color: #004a99;
+    margin: 5px 0;
+}
+.main-content {
+    display: flex;
+    gap: 40px;
+    align-items: center;
+}
+.intro-text { flex: 2; }
+
+.image-side { 
+    flex: 1; 
+    text-align: center; 
+}
+
+/* Updated Logo Styling with fallback support */
+.naap-logo {
+    width: 220px; 
+    height: auto;
+    margin-bottom: 15px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+    display: inline-block;
+}
+
+/* This will show a nice blue box if the image is still missing */
+.naap-logo:after {
+    content: "NAAP LOGO";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 200px;
+    height: 200px;
+    background-color: #004a99;
+    color: white;
+    font-weight: bold;
+    border-radius: 10px;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: -1;
+}
+
+.features-list {
+    list-style: none;
+    padding: 0;
+}
+.features-list li {
+    margin-bottom: 15px;
+    padding-left: 30px;
+    position: relative;
+}
+.features-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+}
+
+.floating-btn-container {
+    position: fixed;
+    bottom: 40px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.btn-access {
+    pointer-events: auto;
+    background-color: #004a99;
+    color: white;
+    padding: 15px 40px;
+    border-radius: 30px;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,74,153,0.4);
+    text-decoration: none;
+    transition: transform 0.2s ease, background-color 0.3s;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+.btn-access:hover {
+    background-color: #003366;
+    transform: scale(1.08); 
+}
+
+.btn-access:active {
+    transform: scale(0.95);
+}
+
+.footer-caption {
+    margin-top: 50px;
+    font-size: 0.8rem;
+    color: #777;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    body { padding: 20px 10px; }
+    .container { padding: 20px; margin-bottom: 80px; }
+    .header-section h1 { font-size: 1.5rem; }
+    .main-content { flex-direction: column; text-align: center; gap: 20px; }
+    .features-list { text-align: left; display: inline-block; }
+    .naap-logo { width: 150px; }
+}

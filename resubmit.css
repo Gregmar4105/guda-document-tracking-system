@@ -1,0 +1,66 @@
+.return-remarks-panel {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border-left: 5px solid #f59e0b;
+}
+
+.return-remarks-panel strong {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.return-remarks-panel pre {
+    background: rgba(255, 255, 255, 0.6);
+    padding: 15px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0 0 10px 0;
+}
+
+.return-remarks-panel .small-text {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin: 0;
+}
+
+.missing-reqs-panel {
+    background: #fef2f2; /* light red */
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 5px solid #ef4444;
+}
+
+.missing-reqs-panel strong {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.missing-reqs-panel ul {
+    list-style: none;
+    padding-left: 5px;
+    margin: 0;
+}
+
+.missing-reqs-panel li {
+    padding: 4px 0;
+    font-weight: 500;
+}
+
+.missing-reqs-panel li::before {
+    content: '❌';
+    margin-right: 10px;
+    font-size: 0.9em;
+}

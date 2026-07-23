@@ -1,0 +1,222 @@
+:root {
+    --naap-navy: #1E3A8A;
+    --naap-navy-hover: #172a6b;
+    --naap-gold: #F59E0B;
+    --bg-gray: #f8fafc;
+    --text-dark: #334155;
+    --text-muted: #64748b;
+    --border-light: #e2e8f0;
+}
+
+body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray); display: flex; color: var(--text-dark); }
+.main-content { 
+    margin-left: 260px; 
+    padding: 40px; 
+    width: calc(100% - 260px); 
+    box-sizing: border-box; 
+    height: 100vh;
+    overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
+}
+
+.page-header { border-bottom: 3px solid var(--naap-gold); margin-bottom: 30px; padding-bottom: 10px; }
+.page-header h1 { color: var(--naap-navy); margin: 0; }
+.page-header p { color: var(--text-muted); margin: 5px 0 0 0; }
+
+.alert { padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; }
+.alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* DSS Boxes */
+.dss-warning-box {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 5px solid #f59e0b;
+}
+.dss-warning-box strong { font-size: 1.1rem; }
+.dss-warning-box ul { padding-left: 20px; margin: 10px 0 0 0; }
+.dss-warning-box li { margin-bottom: 5px; }
+
+.dss-suggestion-box {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #0c4a6e;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* NEW: DSS Box for User History/Reputation */
+.dss-history-box {
+    background: #f8fafc; /* --bg-gray */
+    border: 1px solid var(--border-light);
+    color: var(--text-dark);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 5px solid var(--naap-navy);
+}
+.dss-history-box strong {
+    font-size: 1.1rem;
+    color: var(--naap-navy);
+    display: block;
+    margin-bottom: 8px;
+}
+.dss-history-box p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.queue-container { display: flex; gap: 30px; align-items: flex-start; }
+.details-panel { flex: 2; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+.action-panel { flex: 1; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid var(--naap-gold); }
+
+.details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.info-row { margin-bottom: 20px; border-bottom: 1px solid var(--border-light); padding-bottom: 10px; }
+.info-row label { display: block; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px; font-weight: bold; text-transform: uppercase; }
+.info-row span { font-size: 1.1rem; font-weight: bold; color: var(--text-dark); }
+
+.btn-action { width: 100%; padding: 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 10px; font-size: 1rem; transition: 0.2s; }
+.btn-approve { background: #10b981; color: white; }
+.btn-approve:hover { background: #059669; }
+.btn-return { background: var(--naap-gold); color: white; }
+.btn-reject { background: #ef4444; color: white; }
+.btn-action:disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.btn-action:disabled:hover {
+    background: #d1d5db; /* Prevent hover effect on disabled button */
+}
+
+.main-content::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
+}
+
+textarea { width: 100%; padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; margin-bottom: 20px; box-sizing: border-box; font-family: sans-serif; resize: vertical; }
+textarea:focus { outline: none; border-color: var(--naap-navy); }
+
+/* RULE VIOLATION BOX */
+.rule-box { background: #fef2f2; border: 2px solid #ef4444; border-radius: 8px; padding: 20px; text-align: center; color: #991b1b; }
+.rule-box h4 { margin-top: 0; font-size: 1.2rem; margin-bottom: 8px; }
+
+/* PENDING LIST CARDS */
+.pending-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 5px solid var(--naap-gold);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    display: grid;
+    grid-template-columns: 2fr 3fr auto; /* ID/Title | Details | Action */
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 15px;
+}
+.pending-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    border-left-color: var(--naap-navy);
+}
+.pending-card-main .pending-card-id {
+    font-weight: bold;
+    color: var(--naap-navy);
+    margin-bottom: 5px;
+    font-size: 1.1rem;
+}
+.pending-card-main .pending-card-title {
+    font-size: 0.95rem;
+    color: var(--text-dark);
+}
+.pending-card-details {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+.pending-card-details span {
+    font-weight: 600;
+    color: var(--text-dark);
+    min-width: 70px;
+    display: inline-block;
+}
+.pending-card-action {
+    font-size: 0.9rem;
+    color: var(--naap-gold);
+    font-weight: bold;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* Requirements Checklist Styles */
+.requirements-checklist {
+    flex-direction: column;
+    align-items: flex-start;
+    border-bottom: none !important;
+}
+.requirements-checklist .checklist-items {
+    width: 100%;
+    margin-top: 10px;
+    background: var(--bg-gray);
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid var(--border-light);
+}
+.requirements-checklist .check-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.requirements-checklist .check-item:last-child {
+    margin-bottom: 0;
+}
+.requirements-checklist .check-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 12px;
+    accent-color: var(--naap-navy);
+}
+
+/* ========================================= */
+/* MOBILE RESPONSIVE STYLES FOR QUEUE.PHP    */
+/* ========================================= */
+@media (max-width: 768px) {
+    .queue-container { 
+        flex-direction: column; 
+        gap: 20px; 
+    }
+    .details-panel, .action-panel { 
+        width: 100%; 
+        padding: 20px; 
+        box-sizing: border-box; 
+    }
+    .pending-card { 
+        grid-template-columns: 1fr; /* Stack everything vertically */
+        gap: 15px;
+    }
+    .pending-card-action {
+        text-align: center;
+        background: #f8fafc;
+        padding: 10px;
+        border-radius: 6px;
+        margin-top: 10px;
+    }
+    .page-header h1 { font-size: 1.5rem; }
+    .btn-action { padding: 12px; font-size: 0.95rem; }
+    .main-content { padding: 20px 10px; margin-left: 0; width: 100%; }
+}
+
+@media print {
+    .sidebar { display: none !important; }
+    .main-content { margin-left: 0 !important; width: 100% !important; }
+    body { background: white !important; }
+    .btn-action, a, form button { display: none !important; }
+    * { -webkit-print-color-adjust: exact; }
+}

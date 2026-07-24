@@ -144,12 +144,12 @@ if ($is_signatory) {
             )
             AND (
                 -- Case 1: Custom workflow step matches user's department
-                (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
+                (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE((JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci), '–', '-'), '—', '-') = ?)
 
                 -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
                 OR (
                     JSON_LENGTH(v.custom_workflow) > 0 
-                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = 'Department Head'
+                    AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) = 'Department Head'
                     AND REPLACE(REPLACE(u_req.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
                     AND ? = 1 -- The current user is a head
                 )
@@ -157,9 +157,9 @@ if ($is_signatory) {
                 -- Case 3: Custom workflow step is for a specific department head, e.g., "Accounting (Head)"
                 OR (
                     JSON_LENGTH(v.custom_workflow) > 0
-                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE '% (Head)'
+                    AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) LIKE '% (Head)'
                     AND ? = 1 -- The current user must be a head
-                    AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's base role must match the department name part
+                    AND ? = REPLACE(REPLACE(SUBSTRING_INDEX((JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci), ' (Head)', 1), '–', '-'), '—', '-') -- The user's base role must match the department name part
                 )
             )
 SQL;
@@ -199,7 +199,7 @@ if ($my_role === 'Requestor') {
             INNER JOIN users u ON al.processed_by_user_id = u.user_id
             WHERE
                 (
-                    (JSON_LENGTH(v.custom_workflow) > 0 AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = ?)
+                    (JSON_LENGTH(v.custom_workflow) > 0 AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) = ?)
                     OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
                 )
                 AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
@@ -243,7 +243,7 @@ SQL;
                 FROM vouchers v
                 INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
                 WHERE al.processed_by_user_id = ?
-                    AND ((JSON_LENGTH(v.custom_workflow) > 0 AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = ?) OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?))
+                    AND ((JSON_LENGTH(v.custom_workflow) > 0 AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) = ?) OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?))
                     AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
                     AND NOT EXISTS (SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED'))
 SQL;
@@ -302,7 +302,7 @@ if ($is_signatory) {
             AND v.arta_deadline IS NOT NULL 
             AND (DATE_ADD(al_receive.created_at, INTERVAL (COALESCE(al.processing_days, 3) + 30) DAY) >= ? AND al_receive.created_at <= ?)";
 
-    $sql_where_stage = " AND ( (JSON_LENGTH(v.custom_workflow) > 0 AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = ?) OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?) )";
+    $sql_where_stage = " AND ( (JSON_LENGTH(v.custom_workflow) > 0 AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) = ?) OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?) )";
     $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
 
     // MIS has special privileges to see all documents in its queue, regardless of stage.

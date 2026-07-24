@@ -6,15 +6,8 @@
 echo "<h1>NAAP Document System - Database Migrations</h1>";
 
 // 1. DATABASE CONNECTION
-$host = "sql203.infinityfree.com";
-$db_user = "if0_42343630";
-$db_pass = "AndrioGuda123";
-$db_name = "if0_42343630_dts";
+require_once 'db_connect.php';
 
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
-if ($conn->connect_error) {
-    die("<p style='color: red;'>Database Connection Failed: " . $conn->connect_error . "</p>");
-}
 
 echo "<p>Database connected successfully. Checking for migrations...</p>";
 
@@ -370,6 +363,24 @@ applyMigration('add_password_reset_feature_20240715', [
 applyMigration('add_force_password_change_feature_20240716', [
     "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `password_reset_timestamp`"
 ], $conn);
+
+// Migration 26: Ensure missing columns for document_types and voucher_types
+function ensureColumnExists($table, $column, $definition, $conn) {
+    $res = $conn->query("SHOW COLUMNS FROM `$table` LIKE '$column'");
+    if ($res && $res->num_rows == 0) {
+        $conn->query("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
+    }
+}
+
+ensureColumnExists('document_types', 'default_workflow', 'JSON NULL', $conn);
+ensureColumnExists('document_types', 'created_by_user_id', 'INT NULL', $conn);
+ensureColumnExists('document_types', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1', $conn);
+ensureColumnExists('document_types', 'is_system_default', 'TINYINT(1) NOT NULL DEFAULT 0', $conn);
+
+ensureColumnExists('voucher_types', 'default_workflow', 'JSON NULL', $conn);
+ensureColumnExists('voucher_types', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1', $conn);
+ensureColumnExists('voucher_types', 'min_amount', 'DECIMAL(15, 2) NULL DEFAULT NULL', $conn);
+ensureColumnExists('voucher_types', 'max_amount', 'DECIMAL(15, 2) NULL DEFAULT NULL', $conn);
 
 $conn->close();
 echo "<p>Migration process complete.</p>";

@@ -139,7 +139,7 @@ $dot_color = '#10b981';
 
         <?php if ($is_admin): ?>
             <div class="nav-section-title">Administration</div>
-            <a href="settings.php" class="<?php echo ($current_page == 'settings.php') ? 'active' : ''; ?>">System Settings</a>
+            <a href="admin_settings.php" class="<?php echo ($current_page == 'admin_settings.php') ? 'active' : ''; ?>">System Settings</a>
             <?php if ($is_mis): // Central Repository is MIS-only ?>
                 <a href="list.php?view=all" class="<?php echo ($current_page == 'list.php' && ($_GET['view'] ?? 'all') !== 'my') ? 'active' : ''; ?>">Central Repository</a>
             <?php endif; ?>

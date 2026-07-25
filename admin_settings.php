@@ -1,7 +1,12 @@
 <?php
 session_start();
 // ACCESS CONTROL: Ensure only the correct admin role can access this page.
-if (($_SESSION['role'] ?? '') !== 'Management Information System Office') {
+// The sidebar allows both MIS and Accounting Head to see this link.
+// We will enforce the same rule here for consistency.
+$is_mis = ($_SESSION['role'] ?? '') === 'Management Information System Office';
+$is_acct_head = (($_SESSION['role'] ?? '') === 'Accounting Office' && ($_SESSION['is_head'] ?? 0) == 1);
+
+if (!($is_mis || $is_acct_head)) {
     header("Location: home.php");
     exit();
 }

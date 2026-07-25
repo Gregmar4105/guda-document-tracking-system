@@ -4,14 +4,22 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "192.168.1.113";
+$host = "";
+$port = 20707;
 $db_user = "guda_database";
 $db_pass = "password123";
-$db_name = "guda_if0_42343630_dts";
+$db_name = "gudaDB";
 
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
-if ($conn->connect_error) {
-    die("Database Connection Failed: " . $conn->connect_error);
+$conn = mysqli_init();
+if (!$conn) {
+    die("Database Connection Failed: mysqli_init failed");
+}
+
+// Enable SSL as required by Aiven MySQL
+$conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
+
+if (!@$conn->real_connect($host, $db_user, $db_pass, $db_name, $port, NULL, MYSQLI_CLIENT_SSL)) {
+    die("Database Connection Failed: " . mysqli_connect_error());
 }
 
 // Set character set to utf8mb4 to support a wider range of characters and prevent encoding issues.

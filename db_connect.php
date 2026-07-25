@@ -4,7 +4,7 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "";
+$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
 $port = 20707;
 $db_user = "guda_database";
 $db_pass = "password123";

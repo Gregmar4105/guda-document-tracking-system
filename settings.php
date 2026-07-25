@@ -654,6 +654,41 @@ foreach ($all_departments as $key => $dept) {
             border: none; border-radius: 5px; cursor: pointer;
         }
     </style>
+    <style>
+        /* Accordion styles for long lists */
+        .collapsible-section {
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            margin-top: 15px;
+            background: #fff;
+        }
+        .collapsible-section summary {
+            padding: 15px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--naap-navy);
+        }
+        .collapsible-section summary::-webkit-details-marker {
+            display: none;
+        }
+        .collapsible-section summary::after {
+            content: 'Show ▼';
+            font-size: 0.9rem;
+            font-weight: normal;
+            color: var(--text-muted);
+        }
+        .collapsible-section[open] summary::after {
+            content: 'Hide ▲';
+        }
+        .collapsible-section .collapsible-content {
+            padding: 20px;
+            border-top: 1px solid var(--border-light);
+        }
+    </style>
 </head>
 <body>
 
@@ -763,41 +798,46 @@ foreach ($all_departments as $key => $dept) {
                     </div>
                     <div class="card"> <h3 class="card-title">Manage Existing Accounts</h3>
                         <div class="card-body">
-                            <div class="user-list">
-                                <?php foreach($all_users as $user): ?>
-                                    <div class="user-item">
-                                        <div class="user-info">
-                                            <strong class="user-name">
-                                                <?php echo htmlspecialchars($user['full_name']); ?>
-                                                <?php if($user['is_head']) echo '<span class="head-badge">★ Head</span>'; ?>
-                                                <?php if(!empty($user['google_auth_secret'])) echo '<span class="two-fa-badge">2FA</span>'; ?>
-                                                <?php if($user['password_reset_request'] == 1) echo '<span class="reset-req-badge">RESET REQ</span>'; ?>
-                                            </strong>
-                                            <span class="user-role"><?php echo htmlspecialchars($user['role']); ?></span>
-                                            <span class="user-details">
-                                                <?php echo htmlspecialchars($user['username']); ?>
-                                            </span>
-                                        </div>
-                                        <div class="user-actions">
-                                            <?php if ($user['password_reset_request'] == 1): ?>
-                                                <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to reset the password for this user? A new temporary password will be generated.');">
-                                                    <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                                                    <button type="submit" name="reset_password_admin" class="btn-action btn-reset-pass">Reset Password</button>
-                                                </form>
-                                            <?php else: ?>
-                                                <form method="POST" style="display: inline;" onsubmit="return confirm('Reset 2FA for this user? They will be given a new QR code.');">
-                                                    <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                                                    <button type="submit" name="reset_2fa" class="btn-action btn-reset-2fa">Reset 2FA</button>
-                                                </form>
-                                            <?php endif; ?>
-                                            <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete this user?');">
-                                                <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                                                <button type="submit" name="delete_user" class="btn-action btn-delete" <?php if ($user['role'] === 'Management Information System Office') echo 'disabled'; ?>>Delete</button>
-                                            </form>
-                                        </div>
+                            <details class="collapsible-section">
+                                <summary>View All Accounts (<?php echo count($all_users); ?>)</summary>
+                                <div class="collapsible-content">
+                                    <div class="user-list">
+                                        <?php foreach($all_users as $user): ?>
+                                            <div class="user-item">
+                                                <div class="user-info">
+                                                    <strong class="user-name">
+                                                        <?php echo htmlspecialchars($user['full_name']); ?>
+                                                        <?php if($user['is_head']) echo '<span class="head-badge">★ Head</span>'; ?>
+                                                        <?php if(!empty($user['google_auth_secret'])) echo '<span class="two-fa-badge">2FA</span>'; ?>
+                                                        <?php if($user['password_reset_request'] == 1) echo '<span class="reset-req-badge">RESET REQ</span>'; ?>
+                                                    </strong>
+                                                    <span class="user-role"><?php echo htmlspecialchars($user['role']); ?></span>
+                                                    <span class="user-details">
+                                                        <?php echo htmlspecialchars($user['username']); ?>
+                                                    </span>
+                                                </div>
+                                                <div class="user-actions">
+                                                    <?php if ($user['password_reset_request'] == 1): ?>
+                                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to reset the password for this user? A new temporary password will be generated.');">
+                                                            <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
+                                                            <button type="submit" name="reset_password_admin" class="btn-action btn-reset-pass">Reset Password</button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Reset 2FA for this user? They will be given a new QR code.');">
+                                                            <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
+                                                            <button type="submit" name="reset_2fa" class="btn-action btn-reset-2fa">Reset 2FA</button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete this user?');">
+                                                        <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
+                                                        <button type="submit" name="delete_user" class="btn-action btn-delete" <?php if ($user['role'] === 'Management Information System Office') echo 'disabled'; ?>>Delete</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
                                     </div>
-                                <?php endforeach; ?>
-                            </div>
+                                </div>
+                            </details>
                         </div>
                     </div>
                 </div>
@@ -858,32 +898,36 @@ foreach ($all_departments as $key => $dept) {
                                 <button type="submit" name="add_department" class="btn btn-small">Add</button>
                             </form>
                         </div>
-
-                        <?php foreach($all_departments as $dept): ?>
-                            <div class="dept-item">
-                                <div class="dept-header">
-                                    <strong>
-                                        <?php echo htmlspecialchars($dept['name']); ?>
-                                        <?php if($dept['is_signatory']) echo '<span class="signatory-badge">SIGNATORY</span>'; ?>
-                                    </strong>
-                                    <form method="POST" onsubmit="return confirm('Delete this department? This cannot be undone.');">
-                                        <input type="hidden" name="department_id" value="<?php echo $dept['id']; ?>">
-                                        <button type="submit" name="delete_department" class="btn-delete-subtle">&times;</button>
-                                    </form>
-                                </div>
-                                <div class="job-title-list">
-                                    <ul>
-                                        <?php foreach($dept['job_titles'] as $title): ?>
-                                            <li><span><?php echo htmlspecialchars($title['title_name']); ?></span>
-                                                <form method="POST"><input type="hidden" name="title_id" value="<?php echo $title['id']; ?>"><button type="submit" name="delete_job_title" class="btn-delete-subtle">&times;</button></form>
-                                            </li>
-                                        <?php endforeach; ?>
-                                        <?php if(empty($dept['job_titles'])) echo "<li><span style='color: var(--text-muted); font-style: italic;'>No job titles added.</span></li>"; ?>
-                                    </ul>
-                                    <form method="POST" class="add-title-form"><input type="hidden" name="department_name" value="<?php echo htmlspecialchars($dept['name']); ?>"><input type="text" name="title_name" placeholder="Add new job title..." required><button type="submit" name="add_job_title" class="btn btn-small btn-edit">+</button></form>
-                                </div>
+                        <details class="collapsible-section" open>
+                            <summary>View All Departments (<?php echo count($all_departments); ?>)</summary>
+                            <div class="collapsible-content">
+                                <?php foreach($all_departments as $dept): ?>
+                                    <div class="dept-item">
+                                        <div class="dept-header">
+                                            <strong>
+                                                <?php echo htmlspecialchars($dept['name']); ?>
+                                                <?php if($dept['is_signatory']) echo '<span class="signatory-badge">SIGNATORY</span>'; ?>
+                                            </strong>
+                                            <form method="POST" onsubmit="return confirm('Delete this department? This cannot be undone.');">
+                                                <input type="hidden" name="department_id" value="<?php echo $dept['id']; ?>">
+                                                <button type="submit" name="delete_department" class="btn-delete-subtle">&times;</button>
+                                            </form>
+                                        </div>
+                                        <div class="job-title-list">
+                                            <ul>
+                                                <?php foreach($dept['job_titles'] as $title): ?>
+                                                    <li><span><?php echo htmlspecialchars($title['title_name']); ?></span>
+                                                        <form method="POST"><input type="hidden" name="title_id" value="<?php echo $title['id']; ?>"><button type="submit" name="delete_job_title" class="btn-delete-subtle">&times;</button></form>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                                <?php if(empty($dept['job_titles'])) echo "<li><span style='color: var(--text-muted); font-style: italic;'>No job titles added.</span></li>"; ?>
+                                            </ul>
+                                            <form method="POST" class="add-title-form"><input type="hidden" name="department_name" value="<?php echo htmlspecialchars($dept['name']); ?>"><input type="text" name="title_name" placeholder="Add new job title..." required><button type="submit" name="add_job_title" class="btn btn-small btn-edit">+</button></form>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
                             </div>
-                        <?php endforeach; ?>
+                        </details>
                     </div>
                 </div>
             </div>
@@ -954,65 +998,70 @@ foreach ($all_departments as $key => $dept) {
                                     <label for="selectAllDocTypes" style="margin-bottom: 0; font-size: 1.1rem; color: var(--text-dark); cursor: pointer;">Select All</label>
                                     Existing Templates
                                 </h4>
-                                <?php foreach($all_doc_types as $type):
-                                    $workflow = json_decode($type['default_workflow'] ?? '[]', true);
-                                ?>
-                                    <div class="doc-type-item" id="item-<?php echo $type['id']; ?>">
-                                        <div class="display-view">
-                                            <div style="display: flex; align-items: center; gap: 15px;">
-                                                <input type="checkbox" name="doc_type_ids[]" value="<?php echo $type['id']; ?>" form="bulkDeleteForm" style="width: 20px; height: 20px;">
-                                                <div class="doc-type-info">
-                                                    <strong><?php echo htmlspecialchars($type['name']); ?></strong>
-                                                    <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?></small>
-                                                    <ul class="workflow-list">
-                                                        <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                            <div class="user-actions">
-                                                <button type="button" class="btn btn-small btn-edit" onclick="toggleEditView(<?php echo $type['id']; ?>)">Edit</button>
-                                            </div>
-                                        </div>
-                                        <div class="edit-view" style="position: relative;">
-                                            <form method="POST">
-                                                <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
-                                                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
-                                                    <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars($type['name']); ?>" required>
-                                                                <select name="doc_type_arta" required>
-                                                                    <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
-                                                                </select> 
-                                                    <select name="doc_workflow_type">
-                                                        <option value="Approval" <?php if($type['workflow_type'] == 'Approval') echo 'selected'; ?>>Approval</option>
-                                                        <option value="Transfer" <?php if($type['workflow_type'] == 'Transfer') echo 'selected'; ?>>Transfer</option>
-                                                    </select>
-                                                </div>
-                                                <div class="input-group" style="margin-top: 15px;">
-                                                    <label>Default Routing Sequence</label>
-                                                    <div class="workflow-builder" data-id="<?php echo $type['id']; ?>">
-                                                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                                            <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
-                                                            <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
-                                                            <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
-                                                            <?php endforeach; ?>
-                                                            </select> 
-                                                            <button type="button" class="btn btn-small btn-add-step">+ Add</button>
+                                <details class="collapsible-section">
+                                    <summary>View All (<?php echo count($all_doc_types); ?>)</summary>
+                                    <div class="collapsible-content">
+                                        <?php foreach($all_doc_types as $type):
+                                            $workflow = json_decode($type['default_workflow'] ?? '[]', true);
+                                        ?>
+                                            <div class="doc-type-item" id="item-<?php echo $type['id']; ?>">
+                                                <div class="display-view">
+                                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                                        <input type="checkbox" name="doc_type_ids[]" value="<?php echo $type['id']; ?>" form="bulkDeleteForm" style="width: 20px; height: 20px;">
+                                                        <div class="doc-type-info">
+                                                            <strong><?php echo htmlspecialchars($type['name']); ?></strong>
+                                                            <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?></small>
+                                                            <ul class="workflow-list">
+                                                                <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
+                                                            </ul>
                                                         </div>
-                                                        <ul class="routeList"></ul>
-                                                        <input type="hidden" name="doc_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
+                                                    </div>
+                                                    <div class="user-actions">
+                                                        <button type="button" class="btn btn-small btn-edit" onclick="toggleEditView(<?php echo $type['id']; ?>)">Edit</button>
                                                     </div>
                                                 </div>
-                                                <div class="edit-actions">
-                                                    <button type="submit" name="update_doc_type" class="btn btn-small">Save Changes</button>
-                                                    <button type="button" class="btn btn-small btn-cancel" onclick="toggleEditView(<?php echo $type['id']; ?>)">Cancel</button>
+                                                <div class="edit-view" style="position: relative;">
+                                                    <form method="POST">
+                                                        <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
+                                                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
+                                                            <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars($type['name']); ?>" required>
+                                                                        <select name="doc_type_arta" required>
+                                                                            <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
+                                                                        </select> 
+                                                            <select name="doc_workflow_type">
+                                                                <option value="Approval" <?php if($type['workflow_type'] == 'Approval') echo 'selected'; ?>>Approval</option>
+                                                                <option value="Transfer" <?php if($type['workflow_type'] == 'Transfer') echo 'selected'; ?>>Transfer</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="input-group" style="margin-top: 15px;">
+                                                            <label>Default Routing Sequence</label>
+                                                            <div class="workflow-builder" data-id="<?php echo $type['id']; ?>">
+                                                                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                                                    <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
+                                                                    <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
+                                                                    <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
+                                                                    <?php endforeach; ?>
+                                                                    </select> 
+                                                                    <button type="button" class="btn btn-small btn-add-step">+ Add</button>
+                                                                </div>
+                                                                <ul class="routeList"></ul>
+                                                                <input type="hidden" name="doc_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
+                                                            </div>
+                                                        </div>
+                                                        <div class="edit-actions">
+                                                            <button type="submit" name="update_doc_type" class="btn btn-small">Save Changes</button>
+                                                            <button type="button" class="btn btn-small btn-cancel" onclick="toggleEditView(<?php echo $type['id']; ?>)">Cancel</button>
+                                                        </div>
+                                                    </form>
+                                                    <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
+                                                        <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
+                                                        <button type="submit" name="delete_single_doc_type" class="btn btn-small btn-delete-single">Delete</button>
+                                                    </form>
                                                 </div>
-                                            </form>
-                                            <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
-                                                <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
-                                                <button type="submit" name="delete_single_doc_type" class="btn btn-small btn-delete-single">Delete</button>
-                                            </form>
-                                        </div>
+                                            </div>
+                                        <?php endforeach; ?>
                                     </div>
-                                <?php endforeach; ?>
+                                </details>
                         </div>
                         <div class="card-footer">
                                 <div class="bulk-actions">
@@ -1072,70 +1121,75 @@ foreach ($all_departments as $key => $dept) {
                             <label for="selectAllVoucherTypes" style="margin-bottom: 0; font-size: 1.1rem; color: var(--text-dark); cursor: pointer;">Select All</label>
                             Existing Financial Types
                         </h4>
-                        <?php foreach($all_voucher_types as $v_type): 
-                            $v_workflow = json_decode($v_type['default_workflow'] ?? '[]', true);
-                            $v_reqs = json_decode($v_type['requirements'] ?? '[]', true);
-                        ?>
-                            <div class="doc-type-item" id="item-v-<?php echo $v_type['id']; ?>">
-                                <div class="display-view">
-                                    <div style="display: flex; align-items: center; gap: 15px;">
-                                        <input type="checkbox" name="voucher_type_ids[]" value="<?php echo $v_type['id']; ?>" form="bulkDeleteVoucherTypeForm" style="width: 20px; height: 20px;">
-                                        <div class="doc-type-info">
-                                            <strong><?php echo htmlspecialchars($v_type['name']); ?></strong>
-                                            <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items</small>
-                                            <ul class="workflow-list">
-                                                <?php foreach($v_workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div class="user-actions">
-                                        <button type="button" class="btn btn-small btn-edit" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Edit</button>
-                                    </div>
-                                </div>
-                                <div class="edit-view" style="position: relative;">
-                                    <form method="POST">
-                                        <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
-                                        <div class="input-group">
-                                            <label>Voucher Type Name</label>
-                                            <input type="text" name="voucher_type_name" value="<?php echo htmlspecialchars($v_type['name']); ?>" required>
-                                        </div>
-                                        <div class="input-group">
-                                            <label>ARTA Level</label>
-                                            <select name="voucher_arta_level" required>
-                                                <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($v_type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="input-group">
-                                            <label>Requirements (one per line)</label>
-                                            <textarea name="requirements"><?php echo htmlspecialchars(implode("\n", $v_reqs)); ?></textarea>
-                                        </div>
-                                        <div class="input-group">
-                                            <label>Mandatory Routing Sequence</label>
-                                            <div class="workflow-builder" data-id="v-<?php echo $v_type['id']; ?>">
-                                                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                                    <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
-                                                    <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
-                                                    <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
-                                                    <?php endforeach; ?>
-                                                    </select> 
-                                                    <button type="button" class="btn btn-small btn-add-step">+ Add</button>
-                                                </div>
-                                                <ul class="routeList"></ul>
-                                                <input type="hidden" name="voucher_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($v_type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
-                                            </div>
-                                        </div>
-                                        <div class="edit-actions">
-                                            <button type="submit" name="update_voucher_type" class="btn btn-small btn-gold">Save Changes</button>
-                                            <button type="button" class="btn btn-small btn-cancel" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Cancel</button>
-                                        </div>
-                                    </form>
-                                    <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($v_type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
-                                        <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
-                                        <button type="submit" name="delete_voucher_type" class="btn btn-small btn-delete-single">Delete</button>
-                                    </form>
+        <details class="collapsible-section">
+            <summary>View All (<?php echo count($all_voucher_types); ?>)</summary>
+            <div class="collapsible-content">
+                <?php foreach($all_voucher_types as $v_type): 
+                    $v_workflow = json_decode($v_type['default_workflow'] ?? '[]', true);
+                    $v_reqs = json_decode($v_type['requirements'] ?? '[]', true);
+                ?>
+                    <div class="doc-type-item" id="item-v-<?php echo $v_type['id']; ?>">
+                        <div class="display-view">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <input type="checkbox" name="voucher_type_ids[]" value="<?php echo $v_type['id']; ?>" form="bulkDeleteVoucherTypeForm" style="width: 20px; height: 20px;">
+                                <div class="doc-type-info">
+                                    <strong><?php echo htmlspecialchars($v_type['name']); ?></strong>
+                                    <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items</small>
+                                    <ul class="workflow-list">
+                                        <?php foreach($v_workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
+                                    </ul>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
+                            <div class="user-actions">
+                                <button type="button" class="btn btn-small btn-edit" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Edit</button>
+                            </div>
+                        </div>
+                        <div class="edit-view" style="position: relative;">
+                            <form method="POST">
+                                <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
+                                <div class="input-group">
+                                    <label>Voucher Type Name</label>
+                                    <input type="text" name="voucher_type_name" value="<?php echo htmlspecialchars($v_type['name']); ?>" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>ARTA Level</label>
+                                    <select name="voucher_arta_level" required>
+                                        <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($v_type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Requirements (one per line)</label>
+                                    <textarea name="requirements"><?php echo htmlspecialchars(implode("\n", $v_reqs)); ?></textarea>
+                                </div>
+                                <div class="input-group">
+                                    <label>Mandatory Routing Sequence</label>
+                                    <div class="workflow-builder" data-id="v-<?php echo $v_type['id']; ?>">
+                                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                            <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
+                                            <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
+                                            <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
+                                            <?php endforeach; ?>
+                                            </select> 
+                                            <button type="button" class="btn btn-small btn-add-step">+ Add</button>
+                                        </div>
+                                        <ul class="routeList"></ul>
+                                        <input type="hidden" name="voucher_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($v_type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
+                                    </div>
+                                </div>
+                                <div class="edit-actions">
+                                    <button type="submit" name="update_voucher_type" class="btn btn-small btn-gold">Save Changes</button>
+                                    <button type="button" class="btn btn-small btn-cancel" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Cancel</button>
+                                </div>
+                            </form>
+                            <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($v_type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
+                                <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
+                                <button type="submit" name="delete_voucher_type" class="btn btn-small btn-delete-single">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </details>
                         <?php if (empty($all_voucher_types)): ?>
                             <p style="text-align: center; color: var(--text-muted); padding: 20px; background: #f8fafc; border-radius: 6px;">No financial voucher types have been created yet.</p>
                         <?php endif; ?>
@@ -1171,21 +1225,26 @@ foreach ($all_departments as $key => $dept) {
                         </div>
 
                         <h4 style="margin-top: 30px; color: var(--text-dark);">Existing Holidays</h4>
-                        <div style="border: 1px solid var(--border-light); border-radius: 6px;">
-                            <?php if (!empty($all_holidays)): ?>
-                                <?php foreach($all_holidays as $holiday): ?>
-                                    <div class="holiday-item">
-                                        <span><strong><?php echo date('M d, Y', strtotime($holiday['holiday_date'])); ?></strong> - <?php echo htmlspecialchars($holiday['description']); ?></span>
-                                        <form method="POST" onsubmit="return confirm('Delete this holiday?');">
-                                            <input type="hidden" name="holiday_id" value="<?php echo $holiday['id']; ?>">
-                                            <button type="submit" name="delete_holiday" class="btn-delete-subtle">&times;</button>
-                                        </form>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <p style="text-align: center; color: var(--text-muted); padding: 15px; margin: 0;">No holidays added yet.</p>
-                            <?php endif; ?>
-                        </div>
+                        <details class="collapsible-section">
+                            <summary>View All (<?php echo count($all_holidays); ?>)</summary>
+                            <div class="collapsible-content">
+                                <div style="border: 1px solid var(--border-light); border-radius: 6px;">
+                                    <?php if (!empty($all_holidays)): ?>
+                                        <?php foreach($all_holidays as $holiday): ?>
+                                            <div class="holiday-item">
+                                                <span><strong><?php echo date('M d, Y', strtotime($holiday['holiday_date'])); ?></strong> - <?php echo htmlspecialchars($holiday['description']); ?></span>
+                                                <form method="POST" onsubmit="return confirm('Delete this holiday?');">
+                                                    <input type="hidden" name="holiday_id" value="<?php echo $holiday['id']; ?>">
+                                                    <button type="submit" name="delete_holiday" class="btn-delete-subtle">&times;</button>
+                                                </form>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <p style="text-align: center; color: var(--text-muted); padding: 15px; margin: 0;">No holidays added yet.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </details>
                     </div>
                 </div>
                 <div class="card"> <h3 class="card-title">General System Settings</h3>
@@ -1217,29 +1276,34 @@ foreach ($all_departments as $key => $dept) {
                         </div>
 
                         <h4 style="margin-top: 30px; color: var(--text-dark);">Existing Levels</h4>
-                        <?php foreach($all_arta_levels as $level): ?>
-                            <div class="doc-type-item" id="item-arta-<?php echo $level['id']; ?>">
-                                <div class="display-view">
-                                    <div class="doc-type-info">
-                                        <strong><?php echo htmlspecialchars($level['level_name']); ?></strong>
-                                        <small>Processing Time: <?php echo $level['processing_days']; ?> working days</small>
+                        <details class="collapsible-section">
+                            <summary>View All (<?php echo count($all_arta_levels); ?>)</summary>
+                            <div class="collapsible-content">
+                                <?php foreach($all_arta_levels as $level): ?>
+                                    <div class="doc-type-item" id="item-arta-<?php echo $level['id']; ?>">
+                                        <div class="display-view">
+                                            <div class="doc-type-info">
+                                                <strong><?php echo htmlspecialchars($level['level_name']); ?></strong>
+                                                <small>Processing Time: <?php echo $level['processing_days']; ?> working days</small>
+                                            </div>
+                                            <div class="user-actions">
+                                                <button type="button" class="btn btn-small btn-edit" onclick="toggleArtaEditView(<?php echo $level['id']; ?>)">Edit</button>
+                                            </div>
+                                        </div>
+                                        <div class="edit-view" style="position: relative;">
+                                            <form method="POST" style="display: flex; gap: 15px; align-items: flex-end;">
+                                                <input type="hidden" name="level_id" value="<?php echo $level['id']; ?>">
+                                                <div class="input-group" style="flex-grow: 2; margin-bottom: 0;"><label>Level Name</label><input type="text" name="level_name" value="<?php echo htmlspecialchars($level['level_name']); ?>" required></div>
+                                                <div class="input-group" style="flex-grow: 1; margin-bottom: 0;"><label>Days</label><input type="number" name="processing_days" value="<?php echo $level['processing_days']; ?>" min="0" required></div>
+                                                <button type="submit" name="update_arta_level" class="btn btn-small">Save</button>
+                                                <button type="button" class="btn btn-small btn-cancel" onclick="toggleArtaEditView(<?php echo $level['id']; ?>)">Cancel</button>
+                                            </form>
+                                            <form method="POST" onsubmit="return confirm('Delete this ARTA level?');" style="position: absolute; top: 0; right: 0;"><input type="hidden" name="level_id" value="<?php echo $level['id']; ?>"><button type="submit" name="delete_arta_level" class="btn-delete-subtle">&times;</button></form>
+                                        </div>
                                     </div>
-                                    <div class="user-actions">
-                                        <button type="button" class="btn btn-small btn-edit" onclick="toggleArtaEditView(<?php echo $level['id']; ?>)">Edit</button>
-                                    </div>
-                                </div>
-                                <div class="edit-view" style="position: relative;">
-                                    <form method="POST" style="display: flex; gap: 15px; align-items: flex-end;">
-                                        <input type="hidden" name="level_id" value="<?php echo $level['id']; ?>">
-                                        <div class="input-group" style="flex-grow: 2; margin-bottom: 0;"><label>Level Name</label><input type="text" name="level_name" value="<?php echo htmlspecialchars($level['level_name']); ?>" required></div>
-                                        <div class="input-group" style="flex-grow: 1; margin-bottom: 0;"><label>Days</label><input type="number" name="processing_days" value="<?php echo $level['processing_days']; ?>" min="0" required></div>
-                                        <button type="submit" name="update_arta_level" class="btn btn-small">Save</button>
-                                        <button type="button" class="btn btn-small btn-cancel" onclick="toggleArtaEditView(<?php echo $level['id']; ?>)">Cancel</button>
-                                    </form>
-                                    <form method="POST" onsubmit="return confirm('Delete this ARTA level?');" style="position: absolute; top: 0; right: 0;"><input type="hidden" name="level_id" value="<?php echo $level['id']; ?>"><button type="submit" name="delete_arta_level" class="btn-delete-subtle">&times;</button></form>
-                                </div>
+                                <?php endforeach; ?>
                             </div>
-                        <?php endforeach; ?>
+                        </details>
                     </div>
                 </div>
             </div>

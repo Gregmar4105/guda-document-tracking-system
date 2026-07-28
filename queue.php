@@ -56,7 +56,6 @@ if ($dept_role === 'MIS') {
     // Fetch ARTA info using COALESCE for either document_type or voucher_type
     $sql = "
         SELECT DISTINCT 
-            al.log_id,
             v.voucher_code, v.purpose, v.current_stage_index, v.status, v.date_submitted, v.custom_workflow, v.document_title,
             COALESCE(vt.arta_level, dt.arta_level) AS effective_arta_level,
             al_arta.processing_days,
@@ -86,7 +85,6 @@ if ($dept_role === 'MIS') {
     // Fetch ARTA info using COALESCE for either document_type or voucher_type (using Nowdoc to prevent PHP parse errors)
     $sql = <<<'SQL'
         SELECT DISTINCT 
-            al.log_id,
             v.voucher_code, v.purpose, v.current_stage_index, v.status, v.date_submitted, v.custom_workflow, v.document_title,
             COALESCE(vt.arta_level, dt.arta_level) AS effective_arta_level,
             al_arta.processing_days,
@@ -102,12 +100,12 @@ if ($dept_role === 'MIS') {
         WHERE
             (
                 -- Case 1: Custom workflow step matches user's department
-                (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE((JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci), '–', '-'), '—', '-') = ?)
+                (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
 
                 -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
                 OR (
                     JSON_LENGTH(v.custom_workflow) > 0 
-                    AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) = 'Department Head'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = 'Department Head'
                     AND REPLACE(REPLACE(u.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
                     AND ? = 1 -- The current user is a head
                 )
@@ -115,9 +113,9 @@ if ($dept_role === 'MIS') {
                 -- NEW Case 2.5: Custom workflow step is for a specific department head, e.g., "Accounting (Head)"
                 OR (
                     JSON_LENGTH(v.custom_workflow) > 0
-                    AND (JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci) LIKE '% (Head)'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE '% (Head)'
                     AND ? = 1 -- The current user must be a head
-                    AND ? = REPLACE(REPLACE(SUBSTRING_INDEX((JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) COLLATE utf8mb4_general_ci), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
+                    AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
                 )
 
                 -- Case 3: Fallback for default workflow (no JSON)

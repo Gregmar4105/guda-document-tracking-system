@@ -5,16 +5,7 @@
 
 echo "<h1>NAAP Document System - Database Migrations</h1>";
 
-// 1. DATABASE CONNECTION
-$host = "sql203.infinityfree.com";
-$db_user = "if0_42343630";
-$db_pass = "AndrioGuda123";
-$db_name = "if0_42343630_dts";
-
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
-if ($conn->connect_error) {
-    die("<p style='color: red;'>Database Connection Failed: " . $conn->connect_error . "</p>");
-}
+require_once __DIR__ . '/db_connect.php';
 
 echo "<p>Database connected successfully. Checking for migrations...</p>";
 

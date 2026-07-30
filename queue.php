@@ -198,41 +198,45 @@ if (isset($_GET['select_id']) && !empty($_GET['select_id'])) {
         $d_amount = $voucher_found['amount'];
 
         // 1. Suggestion based on historical approval rate for this document type
-        $hist_stmt_sql = "SELECT status FROM vouchers WHERE ";
+        $hist_stmt_sql_base = "SELECT status FROM vouchers WHERE %s AND status IN ('Approved', 'Paid', 'Ready for Release', 'Returned', 'Rejected')";
         $hist_params = [];
         $hist_types = "";
+        $where_clause = "";
+
         if ($d_voucher_type_id) {
-            $hist_stmt_sql .= "voucher_type_id = ?";
+            $where_clause = "voucher_type_id = ?";
             $hist_params[] = $d_voucher_type_id;
             $hist_types .= "i";
         } elseif ($d_doc_type_id) {
-            $hist_stmt_sql .= "doc_type_id = ?";
+            $where_clause = "doc_type_id = ?";
             $hist_params[] = $d_doc_type_id;
             $hist_types .= "i";
         }
-        $hist_stmt_sql .= " AND status IN ('Approved', 'Paid', 'Ready for Release', 'Returned', 'Rejected')";
-        
-        $hist_stmt = $conn->prepare($hist_stmt_sql);
-        if ($hist_stmt && !empty($hist_params)) {
-            $hist_stmt->bind_param($hist_types, ...$hist_params);
-            $hist_stmt->execute();
-            $hist_res = $hist_stmt->get_result();
-            $total_historical = $hist_res->num_rows;
-            $approved_count = 0;
-            while ($row = $hist_res->fetch_assoc()) {
-                if (!in_array($row['status'], ['Returned', 'Rejected'])) {
-                    $approved_count++;
+
+        if (!empty($where_clause)) {
+            $hist_stmt_sql = sprintf($hist_stmt_sql_base, $where_clause);
+            $hist_stmt = $conn->prepare($hist_stmt_sql);
+            if ($hist_stmt) {
+                $hist_stmt->bind_param($hist_types, ...$hist_params);
+                $hist_stmt->execute();
+                $hist_res = $hist_stmt->get_result();
+                $total_historical = $hist_res->num_rows;
+                $approved_count = 0;
+                while ($row = $hist_res->fetch_assoc()) {
+                    if (!in_array($row['status'], ['Returned', 'Rejected'])) {
+                        $approved_count++;
+                    }
                 }
-            }
-            if ($total_historical > 0) { // Show suggestion even with one historical doc
-                $approval_rate = round(($approved_count / $total_historical) * 100);
-                $suggestion_text = "Historically, <strong>{$approval_rate}%</strong> of similar documents have been approved.";
-                if ($total_historical < 5) {
-                    $suggestion_text .= " <small>(Note: Based on a small sample size of {$total_historical} documents.)</small>";
+                if ($total_historical > 0) { // Show suggestion even with one historical doc
+                    $approval_rate = round(($approved_count / $total_historical) * 100);
+                    $suggestion_text = "Historically, <strong>{$approval_rate}%</strong> of similar documents have been approved.";
+                    if ($total_historical < 5) {
+                        $suggestion_text .= " <small>(Note: Based on a small sample size of {$total_historical} documents.)</small>";
+                    }
+                    $dss_suggestions[] = $suggestion_text;
                 }
-                $dss_suggestions[] = $suggestion_text;
+                $hist_stmt->close();
             }
-            $hist_stmt->close();
         }
 
         // 2. Anomaly: Amount check (for financial vouchers)
@@ -362,10 +366,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                 }
             }
             
-            $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow FROM vouchers WHERE voucher_code = ?");
-            // The previous line was redundant and overwritten. The correct statement is below.
             $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type FROM vouchers WHERE voucher_code = ? FOR UPDATE");
-            $verify_stmt->bind_param("s", $processed_id); // ADDED: Bind parameter for the voucher_code
+            $verify_stmt->bind_param("s", $processed_id);
             $verify_stmt->execute();
             $verify_res = $verify_stmt->get_result();
             $verify_row = $verify_res->fetch_assoc();

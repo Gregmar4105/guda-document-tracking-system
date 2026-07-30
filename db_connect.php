@@ -10,15 +10,28 @@ $db_pass = "password123";
 $db_name = "gudaDB";
 $port = 20707;
 
+// Define the path to your Aiven CA certificate.
+// You must download this file from your Aiven project's overview page
+// and place it in the same directory as this file.
+$ssl_ca_path = __DIR__ . '/ca.pem';
+
 // Aiven cloud databases require an SSL connection.
 // We must initialize mysqli and use real_connect with the SSL flag.
 $conn = mysqli_init();
 if (!$conn) {
     die("mysqli_init failed. The server's PHP environment may not support MySQLi.");
 }
+// Set SSL certificate for a secure, verified connection.
+if (file_exists($ssl_ca_path)) {
+    mysqli_ssl_set($conn, NULL, NULL, $ssl_ca_path, NULL, NULL);
+}
 
-if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL)) {
-    die("Database Connection Failed: " . mysqli_connect_error() . ". This may be due to an SSL connection issue required by the Aiven database.");
+if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT)) {
+    $error_message = mysqli_connect_error();
+    if (strpos($error_message, 'SSL') !== false && !file_exists($ssl_ca_path)) {
+        $error_message .= " <strong>ACTION REQUIRED:</strong> The Aiven CA certificate (ca.pem) was not found. Please download it from your Aiven project dashboard and place it in the project's root directory.";
+    }
+    die("Database Connection Failed: " . $error_message);
 }
 
 // Set character set to utf8mb4 to support a wider range of characters and prevent encoding issues.

@@ -52,18 +52,18 @@ $total_stages = count($workflow_sequence);
 $pending_vouchers = [];
 
 if ($dept_role === 'Management Information System Office') {
-    // MIS can see any document scanned into its queue, regardless of workflow stage, to allow for administrative override.
-    // Fetch ARTA info using COALESCE for either document_type or voucher_type
-    $sql = "
-        SELECT DISTINCT 
+    // MIS has special queue logic. The Head sees all documents scanned into the department,
+    // while staff only see documents they personally scanned. This is for administrative oversight.
+    $sql_base = <<<'SQL'
+        SELECT DISTINCT
             v.voucher_code, v.purpose, v.current_stage_index, v.status, v.date_submitted, v.custom_workflow, v.document_title,
             COALESCE(vt.arta_level, dt.arta_level) AS effective_arta_level,
             al_arta.processing_days,
             COALESCE(vt.name, dt.name) as effective_doc_type_name,
             u.full_name as requestor_name,
             u.role as origin_office
-        FROM vouchers v 
-        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?
+        FROM vouchers v
+        %s -- JOIN clause will be inserted here
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
@@ -71,15 +71,29 @@ if ($dept_role === 'Management Information System Office') {
         WHERE
             v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
             AND NOT EXISTS (
-                SELECT 1 FROM audit_logs al2 
-                WHERE al2.voucher_code = v.voucher_code 
+                SELECT 1 FROM audit_logs al2
+                WHERE al2.voucher_code = v.voucher_code
                 AND al2.department = ?
                 AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
             )
         ORDER BY al.log_id DESC
-    ";
-    $pending_stmt = $conn->prepare($sql);
-    $pending_stmt->bind_param("sis", $dept_role, $user_id, $dept_role);
+SQL;
+
+    if ($is_head) {
+        // MIS HEAD: Sees all documents scanned into the department, regardless of who scanned them.
+        $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?";
+        $sql = sprintf($sql_base, $join_sql);
+        $pending_stmt = $conn->prepare($sql);
+        // The first ? is in the JOIN, the second is in the NOT EXISTS.
+        $pending_stmt->bind_param("ss", $dept_role, $dept_role);
+    } else {
+        // MIS STAFF: Sees only documents they personally scanned.
+        $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?";
+        $sql = sprintf($sql_base, $join_sql);
+        $pending_stmt = $conn->prepare($sql);
+        // The first two ? are in the JOIN, the third is in the NOT EXISTS.
+        $pending_stmt->bind_param("sis", $dept_role, $user_id, $dept_role);
+    }
 } else {
     // Regular signatories must follow the workflow sequence.
     // Fetch ARTA info using COALESCE for either document_type or voucher_type (using Nowdoc to prevent PHP parse errors)

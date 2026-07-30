@@ -51,7 +51,7 @@ $total_stages = count($workflow_sequence);
 // 3. FETCH ALL VOUCHERS PENDING APPROVAL IN CURRENT DEPARTMENT
 $pending_vouchers = [];
 
-if ($dept_role === 'MIS') {
+if ($dept_role === 'Management Information System Office') {
     // MIS can see any document scanned into its queue, regardless of workflow stage, to allow for administrative override.
     // Fetch ARTA info using COALESCE for either document_type or voucher_type
     $sql = "

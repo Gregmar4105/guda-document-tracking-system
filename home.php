@@ -200,7 +200,7 @@ if ($my_role === 'Requestor') {
         $my_stage_index_for_queue = $found_index_for_queue + 1; // 1-based index
     }
 
-    if ($is_head && $my_role !== 'MIS') {
+    if ($is_head && $my_role !== 'Management Information System Office') {
         // --- DEPARTMENT HEAD LOGIC ---
         // Fetches breakdown for tooltip and calculates total.
         // This query is now more robust to handle all custom workflow routing cases.
@@ -257,7 +257,7 @@ SQL;
     } else {
         // --- REGULAR USER OR MIS ADMIN LOGIC ---
         // Fetches count only for the logged-in user.
-        if ($my_role === 'MIS') {
+        if ($my_role === 'Management Information System Office') {
             $sql = <<<'SQL'
                 SELECT COUNT(DISTINCT v.voucher_code) as pending
                 FROM vouchers v

@@ -105,7 +105,6 @@
                         <div class="edit-actions" style="display:flex; gap:10px; align-items:center;">
                             <button type="submit" name="update_voucher_type" class="btn btn-small btn-gold">Save Changes</button>
                             <button type="button" class="btn btn-small btn-cancel" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Cancel</button>
-                            <button type="submit" name="delete_voucher_type" class="btn btn-small btn-delete-single" onclick="return confirm('Are you sure you want to permanently delete \u0027<?php echo htmlspecialchars($v_type['name']); ?>\u0027? This cannot be undone.');">Delete</button>
                         </div>
                     </form>
                 </div>

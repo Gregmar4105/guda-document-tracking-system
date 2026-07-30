@@ -108,7 +108,6 @@
                             <div class="edit-actions" style="display:flex; gap:10px; align-items:center;">
                                 <button type="submit" name="update_doc_type" class="btn btn-small">Save Changes</button>
                                 <button type="button" class="btn btn-small btn-cancel" onclick="toggleEditView(<?php echo $type['id']; ?>)">Cancel</button>
-                                <button type="submit" name="delete_single_doc_type" class="btn btn-small btn-delete-single" onclick="return confirm('Are you sure you want to permanently delete \u0027<?php echo htmlspecialchars($type['name']); ?>\u0027? This cannot be undone.');">Delete</button>
                             </div>
                         </form>
                     </div>

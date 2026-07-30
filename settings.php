@@ -987,6 +987,10 @@ foreach ($all_departments as $key => $dept) {
                                                     </select>
                                                 </div>
                                                 <div class="input-group" style="margin-top: 15px;">
+                                                    <label>Final Status Text (Optional)</label>
+                                                    <input type="text" name="doc_final_status" placeholder="e.g., Leave Approved" value="<?php echo htmlspecialchars($type['final_status_text'] ?? ''); ?>">
+                                                </div>
+                                                <div class="input-group" style="margin-top: 15px;">
                                                     <label>Default Routing Sequence</label>
                                                     <div class="workflow-builder" data-id="<?php echo $type['id']; ?>">
                                                         <div style="display: flex; gap: 10px; margin-bottom: 10px;">

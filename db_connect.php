@@ -43,41 +43,43 @@ $conn->set_charset("utf8mb4");
 /**
  * Calculates the ARTA deadline for a document, considering weekends and holidays.
  *
- * @param string $submission_date The date the document was submitted (YYYY-MM-DD).
- * @param string $arta_level The ARTA level ('Simple', 'Complex', 'Highly Technical').
+ * @param string $start_date The date the processing clock starts (YYYY-MM-DD).
+ * @param int $working_days_required The number of working days for processing.
  * @param mysqli $conn The database connection object.
  * @return string|null The calculated deadline date (YYYY-MM-DD) or null if ARTA calculation is disabled or level is invalid.
  */
-function calculateARTADeadline($submission_date, $arta_level, $conn) {
+function calculateARTADeadline($start_date, $working_days_required, $conn) {
     // Check if ARTA calculation is enabled in system settings
     $settings_res = $conn->query("SELECT setting_value FROM system_settings WHERE setting_key = 'setting_rule'");
-    $arta_enabled = ($settings_res && $settings_row = $settings_res->fetch_assoc()) ? ($settings_row['setting_value'] === '1') : false;
-    $settings_res->close();
+    $arta_enabled = ($settings_res && $settings_row = $settings_res->fetch_assoc()) ? ($settings_row['setting_value'] === '1') : true; // Default to true if setting is missing
+    if ($settings_res) $settings_res->close();
 
     if (!$arta_enabled) {
         return null; // ARTA calculation is disabled
     }
-
-    // Fetch processing days from the database
-    $stmt = $conn->prepare("SELECT processing_days FROM arta_levels WHERE level_name = ?");
-    $stmt->bind_param("s", $arta_level);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if ($result->num_rows > 0) {
-        $working_days_required = (int)$result->fetch_assoc()['processing_days'];
-    } else {
-        return null; // Invalid or non-existent ARTA level
+    
+    // Fetch all holidays once to avoid querying in a loop
+    $holidays = [];
+    $holiday_res = $conn->query("SELECT holiday_date FROM holidays");
+    if ($holiday_res) {
+        while ($h_row = $holiday_res->fetch_assoc()) {
+            $holidays[] = $h_row['holiday_date'];
+        }
+        $holiday_res->close();
     }
-    $stmt->close();
-
-    $current_date = new DateTime($submission_date);
+    
+    if ($working_days_required <= 0) {
+        return $start_date;
+    }
+    
+    $current_date = new DateTime($start_date);
     $days_counted = 0;
 
     while ($days_counted < $working_days_required) {
         $current_date->modify('+1 day'); // Move to the next day
         $day_of_week = (int)$current_date->format('N'); // 1 (for Monday) through 7 (for Sunday)
         $is_weekend = ($day_of_week == 6 || $day_of_week == 7); // Saturday or Sunday
-        $is_holiday = $conn->query("SELECT COUNT(*) FROM holidays WHERE holiday_date = '" . $current_date->format('Y-m-d') . "'")->fetch_row()[0] > 0;
+        $is_holiday = in_array($current_date->format('Y-m-d'), $holidays);
 
         if (!$is_weekend && !$is_holiday) {
             $days_counted++;

@@ -43,30 +43,32 @@ body {
 }
 
 .page-header h1 {
+    font-size: 2.2rem; /* Increased for readability */
     color: var(--naap-navy);
-    font-size: 2rem; /* Slightly smaller for balance */
+    font-weight: 700; /* Bolder header */
 }
 
 /* FILTER */
 .filter-form {
     display: flex;
-    gap: 15px; /* Increased gap */
+    gap: 15px;
     flex-wrap: wrap;
     background: white;
-    padding: 20px; /* Increased padding */
+    padding: 20px;
     border-radius: 8px;
-    margin-bottom: 30px; /* Increased margin */
+    margin-bottom: 30px;
     border: 1px solid var(--border-light);
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .filter-form input,
 .filter-form select {
-    padding: 12px; /* Increased padding */
+    padding: 12px;
     border: 1px solid var(--border-light);
     border-radius: 6px;
-    font-size: 0.95rem;
+    font-size: 1.05rem; /* Increased font size */
     background-color: #f8fafc;
+    font-weight: 500; /* Bolder input text */
     flex-grow: 1; /* Allow inputs to grow */
 }
 
@@ -128,9 +130,9 @@ table {
 
 th {
     background: #f8fafc;
-    padding: 16px 20px; /* More padding */
+    padding: 16px 20px;
     text-align: left;
-    font-size: 0.8rem; /* Smaller header font */
+    font-size: 0.9rem; /* Increased font size */
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -139,9 +141,10 @@ th {
 }
 
 td {
-    padding: 16px 20px; /* More padding */
+    padding: 16px 20px;
     border-bottom: 1px solid var(--border-light); /* Use bottom border on TD */
-    font-size: 0.9rem;
+    font-size: 0.95rem; /* Slightly larger for readability */
+    font-weight: 500; /* Bolder text */
     vertical-align: middle;
 }
 
@@ -157,7 +160,7 @@ tr:hover {
 .badge {
     padding: 4px 12px;
     border-radius: 12px;
-    font-size: 0.75rem;
+    font-size: 0.85rem; /* Increased font size */
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -191,8 +194,8 @@ tr:hover {
 /* ACTIONS */
 .btn-track, .btn-resubmit {
     display: inline-block;
-    padding: 8px 14px; /* Bigger buttons */
-    font-size: 0.8rem;
+    padding: 8px 14px;
+    font-size: 0.9rem; /* Increased font size */
     font-weight: 600;
     border-radius: 6px;
     text-decoration: none;
@@ -221,8 +224,8 @@ tr:hover {
 
 /* ARTA Deadline Flags */
 .deadline-flag {
-    display: block;
-    font-size: 0.75rem;
+    display: block; /* Ensure it's on its own line */
+    font-size: 0.85rem; /* Increased font size */
     font-weight: 600;
     margin-top: 4px;
 }
@@ -276,7 +279,7 @@ tr:hover {
     td::before {
         font-weight: bold;
         display: block;
-        font-size: 0.7rem;
+        font-size: 0.8rem; /* Increased font size */
         color: var(--text-muted);
     }
 

@@ -129,23 +129,29 @@ $total_submitted_stmt->close();
 
 // --- NEW: Metric for documents "En Route" to the current user ---
 $en_route_to_me = 0;
+$en_route_breakdown = []; // New array for tooltip data
 if ($is_signatory) {
     $en_route_sql = <<<'SQL'
-        SELECT COUNT(DISTINCT v.voucher_code) as en_route_count
+        SELECT
+            v.voucher_code,
+            v.document_title,
+            u_req.full_name as requestor_name,
+            v.custom_workflow,
+            v.current_stage_index
         FROM vouchers v
         LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
         WHERE
             v.status IN ('Pending Review', 'Processing', 'In Transit')
-            AND NOT EXISTS ( -- Exclude documents already received by the current user
+            AND NOT EXISTS ( -- Exclude documents already received by the current user's DEPARTMENT
                 SELECT 1 FROM audit_logs al
                 WHERE al.voucher_code = v.voucher_code
                 AND al.action_taken = 'Scan-to-Receive'
-                AND al.processed_by_user_id = ?
+                AND al.department LIKE ?
             )
             AND (
                 -- Case 1: Custom workflow step matches user's department
                 (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
-
+ 
                 -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
                 OR (
                     JSON_LENGTH(v.custom_workflow) > 0 
@@ -153,7 +159,7 @@ if ($is_signatory) {
                     AND REPLACE(REPLACE(u_req.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
                     AND ? = 1 -- The current user is a head
                 )
-
+ 
                 -- Case 3: Custom workflow step is for a specific department head, e.g., "Accounting (Head)"
                 OR (
                     JSON_LENGTH(v.custom_workflow) > 0
@@ -164,9 +170,14 @@ if ($is_signatory) {
             )
 SQL;
     $en_route_stmt = $conn->prepare($en_route_sql);
-    $en_route_stmt->bind_param("issiis", $my_user_id, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role);
+    $like_param = $base_dept_role . '%';
+    $en_route_stmt->bind_param("sssiis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role);
     $en_route_stmt->execute();
-    $en_route_to_me = $en_route_stmt->get_result()->fetch_assoc()['en_route_count'] ?? 0;
+    $en_route_res = $en_route_stmt->get_result();
+    while ($row = $en_route_res->fetch_assoc()) {
+        $en_route_breakdown[] = $row;
+    }
+    $en_route_to_me = count($en_route_breakdown);
     $en_route_stmt->close();
 }
 
@@ -192,28 +203,50 @@ if ($my_role === 'Requestor') {
     if ($is_head && $my_role !== 'MIS') {
         // --- DEPARTMENT HEAD LOGIC ---
         // Fetches breakdown for tooltip and calculates total.
+        // This query is now more robust to handle all custom workflow routing cases.
         $sql = <<<'SQL'
             SELECT u.full_name, COUNT(DISTINCT v.voucher_code) as user_pending_count
             FROM vouchers v
-            INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+            INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department LIKE ?
             INNER JOIN users u ON al.processed_by_user_id = u.user_id
+            LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE
                 (
-                    (JSON_LENGTH(v.custom_workflow) > 0 AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = ?)
+                    -- Case 1: Custom workflow step matches user's department
+                    (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
+
+                    -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
+                    OR (
+                        JSON_LENGTH(v.custom_workflow) > 0 
+                        AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = 'Department Head'
+                        AND REPLACE(REPLACE(u_req.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
+                        AND ? = 1 -- The current user is a head
+                    )
+
+                    -- NEW Case 2.5: Custom workflow step is for a specific department head, e.g., "Accounting (Head)"
+                    OR (
+                        JSON_LENGTH(v.custom_workflow) > 0
+                        AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE '% (Head)'
+                        AND ? = 1 -- The current user must be a head
+                        AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
+                    )
+
+                    -- Case 3: Fallback for default workflow (no JSON)
                     OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
                 )
-                AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
+                AND v.status IN ('Pending Review', 'Processing', 'In Transit')
                 AND NOT EXISTS (
                     SELECT 1 FROM audit_logs al2 
                     WHERE al2.voucher_code = v.voucher_code 
-                    AND al2.department = ?
+                    AND al2.department LIKE ?
                     AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
                 )
             GROUP BY al.processed_by_user_id, u.full_name
             ORDER BY user_pending_count DESC
 SQL;
+        $like_param = $base_dept_role . '%';
         $pending_stmt = $conn->prepare($sql);
-        $pending_stmt->bind_param("ssis", $my_role, $my_role, $my_stage_index_for_queue, $my_role);
+        $pending_stmt->bind_param("sssiisis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $like_param);
         $pending_stmt->execute();
         $pending_res = $pending_stmt->get_result();
         while ($row = $pending_res->fetch_assoc()) {
@@ -230,7 +263,7 @@ SQL;
                 FROM vouchers v
                 INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
                 WHERE al.processed_by_user_id = ?
-                AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
+                AND v.status IN ('Pending Review', 'Processing', 'In Transit')
                 AND NOT EXISTS (
                     SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
                 )
@@ -238,17 +271,47 @@ SQL;
             $pending_stmt = $conn->prepare($sql);
             $pending_stmt->bind_param("sis", $my_role, $my_user_id, $my_role);
         } else {
+            // This query is now aligned with the robust logic from queue.php to correctly identify actionable items.
             $sql = <<<'SQL'
                 SELECT COUNT(DISTINCT v.voucher_code) as pending
                 FROM vouchers v
                 INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
-                WHERE al.processed_by_user_id = ?
-                    AND ((JSON_LENGTH(v.custom_workflow) > 0 AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = ?) OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?))
-                    AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
-                    AND NOT EXISTS (SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED'))
+                LEFT JOIN users u ON v.requestor_id = u.user_id
+                WHERE
+                    (
+                        -- Case 1: Custom workflow step matches user's department
+                        (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
+ 
+                        -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
+                        OR (
+                            JSON_LENGTH(v.custom_workflow) > 0 
+                            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = 'Department Head'
+                            AND REPLACE(REPLACE(u.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
+                            AND ? = 1 -- The current user is a head
+                        )
+ 
+                        -- NEW Case 2.5: Custom workflow step is for a specific department head, e.g., "Accounting (Head)"
+                        OR (
+                            JSON_LENGTH(v.custom_workflow) > 0
+                            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE '% (Head)'
+                            AND ? = 1 -- The current user must be a head
+                            AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
+                        )
+ 
+                        -- Case 3: Fallback for default workflow (no JSON)
+                        OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
+                    )
+                    AND v.status IN ('Pending Review', 'Processing', 'In Transit')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM audit_logs al2 
+                        WHERE al2.voucher_code = v.voucher_code
+                        AND al2.department = ? 
+                        AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') 
+                    )
 SQL;
             $pending_stmt = $conn->prepare($sql);
-            $pending_stmt->bind_param("sisis", $my_role, $my_user_id, $my_role, $my_stage_index_for_queue, $my_role);
+            // Note: The processed_by_user_id = ? was removed from the JOIN, so the corresponding parameter is removed.
+            $pending_stmt->bind_param("sssiisis", $my_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $my_role);
         }
         
         $pending_stmt->execute();
@@ -297,24 +360,49 @@ if ($is_signatory) {
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
             LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
-            JOIN audit_logs al_receive ON v.voucher_code = al_receive.voucher_code AND al_receive.action_taken = 'Scan-to-Receive' AND al_receive.department = ? 
+            JOIN audit_logs al_receive ON v.voucher_code = al_receive.voucher_code AND al_receive.action_taken = 'Scan-to-Receive' AND al_receive.department LIKE ? 
+            LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL 
             AND (DATE_ADD(al_receive.created_at, INTERVAL (COALESCE(al.processing_days, 3) + 30) DAY) >= ? AND al_receive.created_at <= ?)";
 
-    $sql_where_stage = " AND ( (JSON_LENGTH(v.custom_workflow) > 0 AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = ?) OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?) )";
-    $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
+    $sql_where_stage = " AND (
+        -- Case 1: Custom workflow step matches user's department
+        (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
+ 
+        -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
+        OR (
+            JSON_LENGTH(v.custom_workflow) > 0 
+            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) = 'Department Head'
+            AND REPLACE(REPLACE(u_req.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
+            AND ? = 1 -- The current user is a head
+        )
+ 
+        -- NEW Case 2.5: Custom workflow step is for a specific department head, e.g., \"Accounting (Head)\"
+        OR (
+            JSON_LENGTH(v.custom_workflow) > 0
+            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE '% (Head)'
+            AND ? = 1 -- The current user must be a head
+            AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
+        )
+ 
+        -- Case 3: Fallback for default workflow (no JSON)
+        OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
+    )";
+    $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department LIKE ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
 
     // MIS has special privileges to see all documents in its queue, regardless of stage.
     if ($my_role === 'MIS') {
         $sql = $sql_base . $sql_end;
+        $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("ssss", $my_role, $first_day_of_month, $last_day_of_month, $my_role);
+        $deadline_stmt->bind_param("ssss", $like_param, $first_day_of_month, $last_day_of_month, $like_param);
     } else {
         // Regular signatories see documents only at their specific stage.
         $sql = $sql_base . $sql_where_stage . $sql_end;
+        $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("ssssis", $my_role, $first_day_of_month, $last_day_of_month, $my_role, $my_stage_index, $my_role);
+        $deadline_stmt->bind_param("sssssiisis", $like_param, $first_day_of_month, $last_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $like_param);
     }
 } else {
     // Requestors see the deadlines for their own submitted documents.
@@ -340,67 +428,52 @@ $deadline_stmt->close();
 $date_highlights = [];
 
 foreach ($documents_for_calendar as $doc) {
-    // Only check for start_date; processing_days will be given a default below.
-    if (empty($doc['start_date'])) continue;
+    if (empty($doc['start_date']) || empty($doc['arta_deadline'])) {
+        continue;
+    }
 
     $start_date = new DateTime($doc['start_date']);
-    // Use a default of 3 days if processing_days is NULL (e.g., from a failed LEFT JOIN)
-    $processing_days = max(1, (int)($doc['processing_days'] ?? 3));
+    $deadline_date = new DateTime($doc['arta_deadline']);
+    // The period should include the end date, so we modify it to the next day for the interval.
+    $period_end_date = (clone $deadline_date)->modify('+1 day');
     
-    $working_days_elapsed = 0;
-    $calendar_days_offset = 0;
+    $period = new DatePeriod($start_date, new DateInterval('P1D'), $period_end_date);
 
-    // Loop until we reach total working days (EXCLUDES weekends/holidays)
-    while ($working_days_elapsed < $processing_days) {
-
-        $current_date = clone $start_date;
-        $current_date->modify("+$calendar_days_offset day");
-        $date_str = $current_date->format('Y-m-d');
-
-        $day_of_week = (int)$current_date->format('N'); // 1=Mon, 7=Sun
-        $is_weekend = ($day_of_week >= 6); // Sat=6, Sun=7
-        $is_holiday = in_array($date_str, $holidays);
-
-        // ONLY COUNT WORKING DAYS
-        if (!$is_weekend && !$is_holiday) {
-
-            // COLOR LOGIC
-            if ($working_days_elapsed === 0) {
-                $color = 'green'; // Day 1
-            } elseif ($working_days_elapsed === ($processing_days - 1)) {
-                $color = 'red'; // FINAL DAY (deadline)
-            } else {
-                $color = 'orange'; // In progress
-            }
-
-            // Initialize if not exists
-            if (!isset($date_highlights[$date_str])) {
-                $date_highlights[$date_str] = [
-                    'color' => '',
-                    'documents' => []
-                ];
-            }
-
-            // PRIORITY: red > orange > green
-            $existing = $date_highlights[$date_str]['color'];
-            if (
-                $color === 'red' ||
-                ($color === 'orange' && $existing !== 'red') ||
-                ($color === 'green' && empty($existing))
-            ) {
-                $date_highlights[$date_str]['color'] = $color;
-            }
-
-            // STORE DOCUMENT (NO DUPLICATES)
-            $voucher_code = $doc['voucher_code'] ?? null;
-            if ($voucher_code) {
-                $date_highlights[$date_str]['documents'][$voucher_code] = $doc;
-            }
-
-            $working_days_elapsed++; // ✅ ONLY INCREMENT HERE
+    foreach ($period as $date) {
+        $date_str = $date->format('Y-m-d');
+        
+        // COLOR LOGIC
+        if ($date_str == $start_date->format('Y-m-d')) {
+            $color = 'green'; // Day 1
+        } elseif ($date_str == $deadline_date->format('Y-m-d')) {
+            $color = 'red'; // FINAL DAY (deadline)
+        } else {
+            $color = 'orange'; // In progress
         }
 
-        $calendar_days_offset++; // always move forward in calendar
+        // Initialize if not exists
+        if (!isset($date_highlights[$date_str])) {
+            $date_highlights[$date_str] = [
+                'color' => '',
+                'documents' => []
+            ];
+        }
+
+        // PRIORITY: red > orange > green
+        $existing = $date_highlights[$date_str]['color'];
+        if (
+            $color === 'red' ||
+            ($color === 'orange' && $existing !== 'red') ||
+            ($color === 'green' && empty($existing))
+        ) {
+            $date_highlights[$date_str]['color'] = $color;
+        }
+
+        // STORE DOCUMENT (NO DUPLICATES)
+        $voucher_code = $doc['voucher_code'] ?? null;
+        if ($voucher_code) {
+            $date_highlights[$date_str]['documents'][$voucher_code] = $doc;
+        }
     }
 }
 
@@ -493,9 +566,38 @@ foreach ($documents_for_calendar as $doc) {
             <?php endif; ?>
         </div>
         <?php if ($is_signatory): ?>
-        <div class="card">
+        <div class="card <?php if (!empty($en_route_breakdown)) echo 'metric-card-hover'; ?>">
             <h3>En Route to Me</h3>
             <div class="value" style="color: #3b82f6;"><?php echo $en_route_to_me; ?></div>
+            <?php if (!empty($en_route_breakdown)): ?>
+                <div class="metric-tooltip">
+                    <div class="tooltip-header">Documents En Route</div>
+                    <?php foreach ($en_route_breakdown as $item): ?>
+                        <div class="tooltip-item-detailed">
+                            <div class="tooltip-doc-header">
+                                <a href="track.php?code=<?php echo urlencode($item['voucher_code']); ?>" target="_blank">
+                                    <strong><?php echo htmlspecialchars($item['voucher_code']); ?></strong>
+                                </a>
+                                <span><?php echo htmlspecialchars($item['document_title']); ?></span>
+                            </div>
+                            <div class="tooltip-doc-body">
+                                <strong>From:</strong> <?php echo htmlspecialchars($item['requestor_name']); ?>
+                            </div>
+                            <?php
+                                $workflow = json_decode($item['custom_workflow'] ?? '[]', true);
+                                $current_stage_idx = (int)$item['current_stage_index'];
+                                $previous_steps = array_slice($workflow, 0, $current_stage_idx - 1);
+                                if (!empty($previous_steps)):
+                            ?>
+                                <div class="tooltip-doc-path">
+                                    <strong>Path Taken:</strong>
+                                    <span><?php echo implode(' &rarr; ', array_map('htmlspecialchars', $previous_steps)); ?></span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
     </div>

@@ -1485,6 +1485,7 @@ foreach ($all_departments as $key => $dept) {
 $conn->close();
 ?>
 
+
 <?php if (isset($show_2fa_modal) && $show_2fa_modal): ?>
 <div class="qr-modal" id="twoFAModal">
     <div class="qr-modal-content">
@@ -1497,6 +1498,8 @@ $conn->close();
     </div>
 </div>
 <?php endif; ?>
+
+
 
 </body>
 </html>

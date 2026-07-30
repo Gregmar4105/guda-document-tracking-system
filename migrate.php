@@ -5,7 +5,17 @@
 
 echo "<h1>NAAP Document System - Database Migrations</h1>";
 
-require_once __DIR__ . '/db_connect.php';
+// 1. DATABASE CONNECTION
+$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
+$db_user = "guda_database";
+$db_pass = "password123";
+$db_name = "gudaDB";
+$port = 20707;
+
+$conn = new mysqli($host, $db_user, $db_pass, $db_name, $port);
+if ($conn->connect_error) {
+    die("<p style='color: red;'>Database Connection Failed: " . $conn->connect_error . "</p>");
+}
 
 echo "<p>Database connected successfully. Checking for migrations...</p>";
 

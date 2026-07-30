@@ -26,8 +26,8 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
 }
 
 .page-header { border-bottom: 3px solid var(--naap-gold); margin-bottom: 30px; padding-bottom: 10px; }
-.page-header h1 { color: var(--naap-navy); margin: 0; }
-.page-header p { color: var(--text-muted); margin: 5px 0 0 0; }
+.page-header h1 { color: var(--naap-navy); margin: 0; font-weight: 700; }
+.page-header p { color: var(--text-muted); margin: 5px 0 0 0; font-weight: 500; }
 
 .print-header {
     display: none;
@@ -35,7 +35,7 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
 
 /* SELECTION CARD */
 .selection-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 30px; display: flex; align-items: center; gap: 20px; border-top: 5px solid var(--naap-navy); }
-.selection-card select, .selection-card input { padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 1rem; color: var(--text-dark); outline: none; box-sizing: border-box; }
+.selection-card select, .selection-card input { padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 1rem; color: var(--text-dark); outline: none; box-sizing: border-box; font-weight: 500; }
 .selection-card select:focus, .selection-card input:focus { border-color: var(--naap-navy); }
 .selection-card button { background: var(--naap-navy); color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; white-space: nowrap; height: 46px; }
 .selection-card button:hover { background: var(--naap-navy-hover); }
@@ -79,7 +79,7 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
     z-index: 1; /* To sit on top of the line */
 }
 .step-label { font-weight: 600; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.step-status { font-size: 0.75rem; font-weight: 800; margin-top: 8px; }
+.step-status { font-size: 0.8rem; font-weight: 800; margin-top: 8px; }
 
 /* Step States */
 .step.completed .step-icon {
@@ -132,7 +132,7 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
 .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-top: 20px; -webkit-overflow-scrolling: touch; }
 .log-table { width: 100%; border-collapse: collapse; min-width: 700px; }
 .log-table th { background: #f1f5f9; color: var(--naap-navy); padding: 15px; text-align: left; font-size: 0.85rem; border-bottom: 2px solid var(--border-light); text-transform: uppercase; white-space: nowrap;}
-.log-table td { padding: 15px; border-bottom: 1px solid var(--border-light); color: var(--text-dark); font-size: 0.9rem; }
+.log-table td { padding: 15px; border-bottom: 1px solid var(--border-light); color: var(--text-dark); font-size: 0.95rem; font-weight: 500; }
 .time-badge { font-family: monospace; background: #f8fafc; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-light); color: var(--text-muted); white-space: nowrap;}
 .stay-badge { font-weight: bold; color: var(--naap-gold); background: #fffbeb; padding: 4px 8px; border-radius: 4px; border: 1px solid #fef08a; white-space: nowrap;}
 

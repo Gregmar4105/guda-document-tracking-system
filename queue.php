@@ -92,7 +92,7 @@ if ($dept_role === 'MIS') {
             u.full_name as requestor_name,
             u.role as origin_office
         FROM vouchers v
-        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?
+        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
@@ -131,7 +131,7 @@ if ($dept_role === 'MIS') {
         ORDER BY al.log_id DESC
 SQL;
     $pending_stmt = $conn->prepare($sql);
-    $pending_stmt->bind_param("sissiisis", $dept_role, $user_id, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $dept_role);
+    $pending_stmt->bind_param("sssiisis", $dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $dept_role);
 }
 
 $pending_stmt->execute();
@@ -305,6 +305,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             }
         }
         // --- END: REQUIREMENT CHECKLIST VALIDATION ---
+
+        // --- NEW: HEAD-ONLY APPROVAL VALIDATION ---
+        if ($action === 'Accept') {
+            // Fetch the workflow_type for the document being processed.
+            $w_type_stmt = $conn->prepare("SELECT workflow_type FROM vouchers WHERE voucher_code = ?");
+            $w_type_stmt->bind_param("s", $_POST['voucher_id']);
+            $w_type_stmt->execute();
+            $w_type_res = $w_type_stmt->get_result();
+            $doc_workflow_type = ($w_type_res->num_rows > 0) ? $w_type_res->fetch_assoc()['workflow_type'] : 'Approval';
+            $w_type_stmt->close();
+
+            // The current user's head status is already available in $is_head
+            if ($doc_workflow_type === 'Approval' && $is_head != 1) {
+                $search_error = "Validation Failed: Only department heads are authorized to 'Accept' documents in an Approval workflow.";
+            }
+        }
+        // --- END: HEAD-ONLY APPROVAL VALIDATION ---
 
         // Only proceed if there are no validation errors.
         if (empty($search_error)) {
@@ -736,6 +753,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!decisionForm) return;
 
     const workflowType = '<?php echo $voucher_found['workflow_type'] ?? 'Approval'; ?>';
+    const isHead = <?php echo $is_head; ?>;
     const remarksTextarea = document.getElementById('remarksTextarea');
     const acceptBtn = document.getElementById('acceptBtn');
     const returnBtn = document.getElementById('returnBtn');
@@ -757,10 +775,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Validate Accept button based on checklist requirements
+        // --- NEW: Combined validation for Accept button ---
+        let acceptIsDisabled = false;
+        let acceptTitle = '';
+
+        // Condition 1: Checklist requirements
         if (totalRequirements > 0) {
             const checkedRequirements = document.querySelectorAll('.requirements-checklist input[type="checkbox"]:checked').length;
             acceptBtn.disabled = (checkedRequirements !== totalRequirements);
+            if (checkedRequirements !== totalRequirements) {
+                acceptIsDisabled = true;
+                acceptTitle = 'All requirements must be checked before accepting.';
+            }
         }
+
+        // Condition 2: Head-only for Approval workflows (overrides previous title if true)
+        if (workflowType === 'Approval' && !isHead) {
+            acceptIsDisabled = true;
+            acceptTitle = 'Only department heads can accept approval-type documents.';
+        }
+
+        acceptBtn.disabled = acceptIsDisabled;
+        acceptBtn.title = acceptTitle;
     }
 
     // Add event listeners

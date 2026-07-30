@@ -77,6 +77,8 @@ if (isset($_SESSION['user_id']) && isset($conn) && !$conn->connect_error) {
 $dot_color = '#10b981'; 
 ?>
 
+<link rel="stylesheet" href="layout.css?v=<?php echo filemtime('layout.css'); ?>">
+
 <button id="mobile-menu-btn" class="mobile-menu-btn">
     <span></span>
     <span></span>

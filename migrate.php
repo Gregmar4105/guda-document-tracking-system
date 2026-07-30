@@ -12,9 +12,15 @@ $db_pass = "password123";
 $db_name = "gudaDB";
 $port = 20707;
 
-$conn = new mysqli($host, $db_user, $db_pass, $db_name, $port);
-if ($conn->connect_error) {
-    die("<p style='color: red;'>Database Connection Failed: " . $conn->connect_error . "</p>");
+// Aiven cloud databases require an SSL connection.
+// We must initialize mysqli and use real_connect with the SSL flag.
+$conn = mysqli_init();
+if (!$conn) {
+    die("<p style='color: red;'>mysqli_init failed. The server's PHP environment may not support MySQLi.</p>");
+}
+
+if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL)) {
+    die("<p style='color: red;'>Database Connection Failed: " . mysqli_connect_error() . ". This may be due to an SSL connection issue.</p>");
 }
 
 echo "<p>Database connected successfully. Checking for migrations...</p>";

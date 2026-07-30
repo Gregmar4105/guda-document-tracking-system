@@ -33,7 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $user = $result->fetch_assoc();
         $db_password = $user['password_hash'];
 
-        if (password_verify($password, $db_password) || $password === $db_password) {
+        if (password_verify($password, $db_password)) {
             // --- NEW: Check for forced password change ---
             if ($user['must_change_password'] == 1) {
                 $_SESSION['force_change_user_id'] = $user['user_id'];

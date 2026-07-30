@@ -256,20 +256,36 @@ SQL;
         $pending_stmt->close();
     } else {
         // --- REGULAR USER OR MIS ADMIN LOGIC ---
-        // Fetches count only for the logged-in user.
+        // Fetches a count of documents in the user's departmental queue.
         if ($my_role === 'Management Information System Office') {
-            $sql = <<<'SQL'
-                SELECT COUNT(DISTINCT v.voucher_code) as pending
-                FROM vouchers v
-                INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
-                WHERE al.processed_by_user_id = ?
-                AND v.status IN ('Pending Review', 'Processing', 'In Transit')
-                AND NOT EXISTS (
-                    SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
-                )
+            if ($is_head) {
+                // MIS HEAD: Counts all documents scanned into the department.
+                $sql = <<<'SQL'
+                    SELECT COUNT(DISTINCT v.voucher_code) as pending
+                    FROM vouchers v
+                    INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+                    WHERE v.status IN ('Pending Review', 'Processing', 'In Transit')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                    )
 SQL;
-            $pending_stmt = $conn->prepare($sql);
-            $pending_stmt->bind_param("sis", $my_role, $my_user_id, $my_role);
+                $pending_stmt = $conn->prepare($sql);
+                $pending_stmt->bind_param("ss", $my_role, $my_role);
+            } else {
+                // MIS STAFF: Counts only documents they personally scanned.
+                $sql = <<<'SQL'
+                    SELECT COUNT(DISTINCT v.voucher_code) as pending
+                    FROM vouchers v
+                    INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+                    WHERE al.processed_by_user_id = ?
+                    AND v.status IN ('Pending Review', 'Processing', 'In Transit')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                    )
+SQL;
+                $pending_stmt = $conn->prepare($sql);
+                $pending_stmt->bind_param("sis", $my_role, $my_user_id, $my_role);
+            }
         } else {
             // This query is now aligned with the robust logic from queue.php to correctly identify actionable items.
             $sql = <<<'SQL'

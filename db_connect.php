@@ -26,7 +26,10 @@ if (file_exists($ssl_ca_path)) {
     mysqli_ssl_set($conn, NULL, NULL, $ssl_ca_path, NULL, NULL);
 }
 
-if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT)) {
+// Connect using SSL and verify the server's certificate against the provided CA.
+// This is the most secure method. If this fails in your hosting environment,
+// you may need to revert to MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT, but this is less secure.
+if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL)) {
     $error_message = mysqli_connect_error();
     if (strpos($error_message, 'SSL') !== false && !file_exists($ssl_ca_path)) {
         $error_message .= " <strong>ACTION REQUIRED:</strong> The Aiven CA certificate (ca.pem) was not found. Please download it from your Aiven project dashboard and place it in the project's root directory.";

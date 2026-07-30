@@ -71,48 +71,43 @@
                     </div>
                 </div>
                 <div class="edit-view" style="position: relative;">
-                    <div style="display:flex; gap:10px; align-items:flex-start; margin-top: 15px;">
-                        <form method="POST" style="flex: 1;">
-                            <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
-                            <div class="input-group">
-                                <label>Voucher Type Name</label>
-                                <input type="text" name="voucher_type_name" value="<?php echo htmlspecialchars($v_type['name']); ?>" required>
-                            </div>
-                            <div class="input-group">
-                                <label>ARTA Level</label>
-                                <select name="voucher_arta_level" required>
-                                    <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($v_type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <label>Requirements (one per line)</label>
-                                <textarea name="requirements"><?php echo htmlspecialchars(implode("\n", $v_reqs)); ?></textarea>
-                            </div>
-                            <div class="input-group">
-                                <label>Mandatory Routing Sequence</label>
-                                <div class="workflow-builder" data-id="v-<?php echo $v_type['id']; ?>">
-                                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                        <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
-                                        <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
-                                        <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
-                                        <?php endforeach; ?>
-                                        </select> 
-                                        <button type="button" class="btn btn-small btn-add-step">+ Add</button>
-                                    </div>
-                                    <ul class="routeList"></ul>
-                                    <input type="hidden" name="voucher_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($v_type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
+                    <form method="POST" style="margin-top: 15px;">
+                        <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
+                        <div class="input-group">
+                            <label>Voucher Type Name</label>
+                            <input type="text" name="voucher_type_name" value="<?php echo htmlspecialchars($v_type['name']); ?>" required>
+                        </div>
+                        <div class="input-group">
+                            <label>ARTA Level</label>
+                            <select name="voucher_arta_level" required>
+                                <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($v_type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Requirements (one per line)</label>
+                            <textarea name="requirements"><?php echo htmlspecialchars(implode("\n", $v_reqs)); ?></textarea>
+                        </div>
+                        <div class="input-group">
+                            <label>Mandatory Routing Sequence</label>
+                            <div class="workflow-builder" data-id="v-<?php echo $v_type['id']; ?>">
+                                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                    <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
+                                    <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
+                                    <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
+                                    <?php endforeach; ?>
+                                    </select> 
+                                    <button type="button" class="btn btn-small btn-add-step">+ Add</button>
                                 </div>
+                                <ul class="routeList"></ul>
+                                <input type="hidden" name="voucher_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($v_type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
                             </div>
-                            <div class="edit-actions">
-                                <button type="submit" name="update_voucher_type" class="btn btn-small btn-gold">Save Changes</button>
-                                <button type="button" class="btn btn-small btn-cancel" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Cancel</button>
-                            </div>
-                        </form>
-                        <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($v_type['name']); ?>\'? This cannot be undone.');" style="display:inline-flex; align-items:center;">
-                            <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
-                            <button type="submit" name="delete_voucher_type" class="btn btn-small btn-delete-single">Delete</button>
-                        </form>
-                    </div>
+                        </div>
+                        <div class="edit-actions" style="display:flex; gap:10px; align-items:center;">
+                            <button type="submit" name="update_voucher_type" class="btn btn-small btn-gold">Save Changes</button>
+                            <button type="button" class="btn btn-small btn-cancel" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Cancel</button>
+                            <button type="submit" name="delete_voucher_type" class="btn btn-small btn-delete-single" onclick="return confirm('Are you sure you want to permanently delete \u0027<?php echo htmlspecialchars($v_type['name']); ?>\u0027? This cannot be undone.');">Delete</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         <?php endforeach; ?>

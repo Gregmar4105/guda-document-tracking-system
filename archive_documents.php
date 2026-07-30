@@ -82,6 +82,6 @@ foreach ($chunks as $index => $chunk) {
     }
 }
 
-$echo "<h2 style='color: green;'>Archiving process complete. Successfully archived a total of {$total_archived} documents.</h2>";
+echo "<h2 style='color: green;'>Archiving process complete. Successfully archived a total of {$total_archived} documents.</h2>";
 
 $conn->close();

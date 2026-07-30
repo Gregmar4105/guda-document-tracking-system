@@ -4,12 +4,13 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "sql203.infinityfree.com";
-$db_user = "if0_42343630";
-$db_pass = "AndrioGuda123";
-$db_name = "if0_42343630_dts";
+$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
+$db_user = "guda_database";
+$db_pass = "password123";
+$db_name = "gudaDB";
+$port = 20707;
 
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
+$conn = new mysqli($host, $db_user, $db_pass, $db_name, $port);
 if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_error); }
 
 // Set character set to utf8mb4 to support a wider range of characters and prevent encoding issues.

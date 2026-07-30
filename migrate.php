@@ -391,8 +391,8 @@ applyMigration('add_force_password_change_feature_20240716', [
 
 // Migration 26: Add category column for HR analytics
 applyMigration('add_category_to_doc_and_voucher_types_20240717', [
-    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`",
-    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`"
+    "ALTER TABLE `document_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`",
+    "ALTER TABLE `voucher_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`"
 ], $conn);
 
 $conn->close();

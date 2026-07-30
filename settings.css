@@ -271,3 +271,6 @@ textarea {
     .settings-grid { grid-template-columns: 1fr; }
     .main-content { margin-left: 0; width: 100%; padding: 80px 20px 30px 20px;}
 }
+
+/* Defensive: hide delete buttons that may be absolutely positioned inside edit views to prevent overlap with dropdowns */
+.edit-view .btn-delete-single, .doc-type-item .btn-delete-single { display: none !important; }

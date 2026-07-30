@@ -78,44 +78,38 @@
                     </div>
                     <div class="edit-view" style="position: relative;">
                         <!-- Form for UPDATE -->
-                        <div style="display:flex; gap:10px; align-items:flex-start; margin-top: 15px;">
-                            <form method="POST" style="flex: 1;">
-                                <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
-                                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
-                                    <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars($type['name']); ?>" required>
-                                                <select name="doc_type_arta" required>
-                                                    <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
-                                                </select> 
-                                    <select name="doc_workflow_type">
-                                        <option value="Approval" <?php if($type['workflow_type'] == 'Approval') echo 'selected'; ?>>Approval</option>
-                                        <option value="Transfer" <?php if($type['workflow_type'] == 'Transfer') echo 'selected'; ?>>Transfer</option>
-                                    </select>
-                                </div>
-                                <div class="input-group" style="margin-top: 15px;">
-                                    <label>Default Routing Sequence</label>
-                                    <div class="workflow-builder" data-id="<?php echo $type['id']; ?>">
-                                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                            <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
-                                            <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
-                                            <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
-                                            <?php endforeach; ?>
+                        <form method="POST" style="margin-top: 15px;">
+                            <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
+                            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
+                                <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars($type['name']); ?>" required>
+                                            <select name="doc_type_arta" required>
+                                                <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
                                             </select> 
-                                            <button type="button" class="btn btn-small btn-add-step">+ Add</button>
-                                        </div>
-                                        <ul class="routeList"></ul>
-                                        <input type="hidden" name="doc_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
+                                <select name="doc_workflow_type">
+                                    <option value="Approval" <?php if($type['workflow_type'] == 'Approval') echo 'selected'; ?>>Approval</option>
+                                    <option value="Transfer" <?php if($type['workflow_type'] == 'Transfer') echo 'selected'; ?>>Transfer</option>
+                                </select>
+                            </div>
+                            <div class="input-group" style="margin-top: 15px;">
+                                <label>Default Routing Sequence</label>
+                                <div class="workflow-builder" data-id="<?php echo $type['id']; ?>">
+                                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                        <select class="officeSelect" style="flex: 1;"><option value="Department Head">Department Head (of Requestor)</option>
+                                        <?php foreach($department_names as $dept_name): ?><option value="<?php echo htmlspecialchars($dept_name); ?>"><?php echo htmlspecialchars($dept_name); ?></option>
+                                        <option value="<?php echo htmlspecialchars($dept_name . ' (Head)'); ?>"><?php echo htmlspecialchars($dept_name . ' (Head)'); ?></option>
+                                        <?php endforeach; ?>
+                                        </select> 
+                                        <button type="button" class="btn btn-small btn-add-step">+ Add</button>
                                     </div>
+                                    <ul class="routeList"></ul>
+                                    <input type="hidden" name="doc_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
                                 </div>
-                                <div class="edit-actions">
-                                    <button type="submit" name="update_doc_type" class="btn btn-small">Save Changes</button>
-                                    <button type="button" class="btn btn-small btn-cancel" onclick="toggleEditView(<?php echo $type['id']; ?>)">Cancel</button>
-                                </div>
-                            </form>
-                            <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($type['name']); ?>\'? This cannot be undone.');" style="display:inline-flex; align-items:center;">
-                                <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
-                                <button type="submit" name="delete_single_doc_type" class="btn btn-small btn-delete-single">Delete</button>
-                            </form>
-                        </div>
+                            </div>
+                            <div class="edit-actions" style="display:flex; gap:10px; align-items:center;">
+                                <button type="submit" name="update_doc_type" class="btn btn-small">Save Changes</button>
+                                <button type="button" class="btn btn-small btn-cancel" onclick="toggleEditView(<?php echo $type['id']; ?>)">Cancel</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             <?php endforeach; ?>

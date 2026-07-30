@@ -61,7 +61,8 @@ if ($dept_role === 'Management Information System Office') {
             al_arta.processing_days,
             COALESCE(vt.name, dt.name) as effective_doc_type_name,
             u.full_name as requestor_name,
-            u.role as origin_office
+            u.role as origin_office,
+            al.log_id as audit_log_id
         FROM vouchers v
         %s -- JOIN clause will be inserted here
         LEFT JOIN users u ON v.requestor_id = u.user_id
@@ -85,14 +86,24 @@ SQL;
         $sql = sprintf($sql_base, $join_sql);
         $pending_stmt = $conn->prepare($sql);
         // The first ? is in the JOIN, the second is in the NOT EXISTS.
-        $pending_stmt->bind_param("ss", $dept_role, $dept_role);
+    if (!$pending_stmt) {
+        $search_error = "Database Error: " . $conn->error;
+        $pending_vouchers = [];
     } else {
-        // MIS STAFF: Sees only documents they personally scanned.
-        $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?";
-        $sql = sprintf($sql_base, $join_sql);
-        $pending_stmt = $conn->prepare($sql);
-        // The first two ? are in the JOIN, the third is in the NOT EXISTS.
+        $pending_stmt->bind_param("ss", $dept_role, $dept_role);
+    }
+    } else {
+    // MIS STAFF: Sees only documents they personally scanned.
+    $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?";
+    $sql = sprintf($sql_base, $join_sql);
+    $pending_stmt = $conn->prepare($sql);
+    // The first two ? are in the JOIN, the third is in the NOT EXISTS.
+    if (!$pending_stmt) {
+        $search_error = "Database Error: " . $conn->error;
+        $pending_vouchers = [];
+    } else {
         $pending_stmt->bind_param("sis", $dept_role, $user_id, $dept_role);
+    }
     }
 } else {
     // Regular signatories must follow the workflow sequence.
@@ -104,7 +115,8 @@ SQL;
             al_arta.processing_days,
             COALESCE(vt.name, dt.name) as effective_doc_type_name,
             u.full_name as requestor_name,
-            u.role as origin_office
+            u.role as origin_office,
+            al.log_id as audit_log_id
         FROM vouchers v
         INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
         LEFT JOIN users u ON v.requestor_id = u.user_id
@@ -145,16 +157,26 @@ SQL;
         ORDER BY al.log_id DESC
 SQL;
     $pending_stmt = $conn->prepare($sql);
-    $pending_stmt->bind_param("sssiisis", $dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $dept_role);
+    if (!$pending_stmt) {
+        $search_error = "Database Error: " . $conn->error;
+        $pending_vouchers = [];
+    } else {
+        $pending_stmt->bind_param("sssiisis", $dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $dept_role);
+    }
 }
 
-$pending_stmt->execute();
-$pending_res = $pending_stmt->get_result();
+if ($pending_stmt) {
+    $pending_stmt->execute();
+    $pending_res = $pending_stmt->get_result();
 
-while($row = $pending_res->fetch_assoc()) {
-    $pending_vouchers[] = $row;
+    while($row = $pending_res->fetch_assoc()) {
+        $pending_vouchers[] = $row;
+    }
+    $pending_stmt->close();
+} else {
+    // Prepared statement failed earlier; $search_error already set.
+    $pending_vouchers = [];
 }
-$pending_stmt->close();
 
 // 4. HANDLE VOUCHER SELECTION FROM QUEUE
 if (isset($_GET['select_id']) && !empty($_GET['select_id'])) {

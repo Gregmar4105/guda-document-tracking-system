@@ -398,14 +398,6 @@ applyMigration('add_category_to_doc_and_voucher_types_20240717', [
     "ALTER TABLE `voucher_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`"
 ], $conn);
 
-// Migration 27: Clean up department names in audit logs
-applyMigration('cleanup_department_names_in_audit_logs_20240730', [
-    // First, standardize dashes to prevent issues with the next step
-    "UPDATE `audit_logs` SET `department` = REPLACE(REPLACE(`department`, '–', '-'), '—', '-') WHERE `department` LIKE '%–%' OR `department` LIKE '%—%'",
-    // Remove the '(Head)' suffix from any existing records
-    "UPDATE `audit_logs` SET `department` = TRIM(REGEXP_REPLACE(department, '\\\\s*\\\\(Head\\\\)$', '')) WHERE `department` LIKE '%(Head)'"
-], $conn);
-
 $conn->close();
 echo "<p>Migration process complete.</p>";
 ?>

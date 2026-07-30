@@ -18,13 +18,6 @@ $user_res = $user_stmt->get_result();
 $user_id = ($user_res->num_rows > 0) ? $user_res->fetch_assoc()['user_id'] : NULL;
 $user_stmt->close();
 
-// NEW: Get base department role for heads to match against workflow steps and for logging
-$is_head = $_SESSION['is_head'] ?? 0;
-$base_dept_role = $dept_role;
-if ($is_head) {
-    $base_dept_role = trim(preg_replace('/\s*\(Head\)$/i', '', $base_dept_role));
-}
-
 // Determine Stage Dynamically
 $workflow_sequence = [];
 $seq_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 AND is_active = 1 ORDER BY name ASC");
@@ -81,56 +74,62 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
         if (empty($error_msg) && $dept_role !== 'Management Information System Office') {
             $current_stage_0_indexed = $v_stage - 1;
             $expected_dept_at_this_stage = $doc_workflow[$current_stage_0_indexed] ?? null;
+            $is_head_route = (strpos($expected_dept_at_this_stage, '(Head)') !== false) || ($expected_dept_at_this_stage === 'Department Head');
+            $current_user_is_head = ($_SESSION['is_head'] ?? 0) == 1;
 
             $is_authorized_to_receive = false;
 
-            // Normalize the expected department name from the workflow
-            $normalized_expected_dept = str_replace(['–', '—'], '-', (string)$expected_dept_at_this_stage);
-            // The user's base role is already calculated as $base_dept_role
-            $normalized_user_base_role = str_replace(['–', '—'], '-', (string)$base_dept_role);
-
-            // Case 1: Route is for a specific head, e.g., "Accounting Office (Head)"
-            if (preg_match('/^(.*) \(Head\)$/', $normalized_expected_dept, $matches)) {
-                $dept_name_for_head_check = trim($matches[1]);
-                if ($normalized_user_base_role === $dept_name_for_head_check && $is_head) {
-                    $is_authorized_to_receive = true;
-                }
-            // Case 2: Route is for the generic "Department Head"
-            } elseif ($normalized_expected_dept === 'Department Head') {
-                if ($is_head) {
-                    // Must be the head of the requestor's department.
-                    $req_dept_stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
-                    $req_dept_stmt->bind_param("i", $requestor_id);
-                    $req_dept_stmt->execute();
-                    $requestor_department = $req_dept_stmt->get_result()->fetch_assoc()['role'] ?? null;
-                    $req_dept_stmt->close();
-
-                    // Normalize the requestor's department for comparison
-                    $normalized_requestor_dept = str_replace(['–', '—'], '-', (string)$requestor_department);
-
-                    if ($requestor_department && $normalized_user_base_role === $normalized_requestor_dept) {
-                        $is_authorized_to_receive = true;
-                    }
-                }
-            // Case 3: Standard department route (for any member, head or not)
-            } elseif ($normalized_expected_dept === $normalized_user_base_role) {
-                $is_authorized_to_receive = true;
-            }
-
-            // If after all checks, user is not authorized, set the error message.
-            if (empty($error_msg) && !$is_authorized_to_receive) {
-                if (strpos($normalized_expected_dept, 'Head') !== false && !$is_head) {
+            if ($is_head_route) {
+                // --- HEAD-ONLY ROUTE VALIDATION ---
+                if (!$current_user_is_head) {
                     $error_msg = "Sequence Error: This document is designated for a Department Head, but you are not registered as one.";
                 } else {
-                    $error_msg = "Sequence Error: This document is not currently at your stage in the workflow. It is at stage " . $v_stage . " (" . htmlspecialchars($expected_dept_at_this_stage ?? 'N/A') . ").";
+                    // User is a head, now check if they are the *correct* head.
+                    if ($expected_dept_at_this_stage === 'Department Head') {
+                        // Generic 'Department Head' - must be head of the requestor's department.
+                        $req_dept_stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
+                        $req_dept_stmt->bind_param("i", $requestor_id);
+                        $req_dept_stmt->execute();
+                        $requestor_department = $req_dept_stmt->get_result()->fetch_assoc()['role'] ?? null;
+                        $req_dept_stmt->close();
+                        if ($dept_role === $requestor_department) {
+                            $is_authorized_to_receive = true;
+                        }
+                    } elseif (preg_match('/^(.*) \(Head\)$/', $expected_dept_at_this_stage, $matches)) {
+                        // Specific head, e.g., "Accounting Office (Head)"
+                        $dept_name_for_head_check = trim($matches[1]);
+                        if ($dept_role === $dept_name_for_head_check) {
+                            $is_authorized_to_receive = true;
+                        }
+                    }
                 }
+            } else {
+                // --- GENERAL DEPARTMENT ROUTE VALIDATION ---
+                // This route is for any member of the department, head or not.
+                $user_base_role = $dept_role;
+                // If a user is a head, their role might be stored as 'Department Name (Head)'.
+                // We strip the suffix to compare against the base department name in the workflow.
+                if ($current_user_is_head) {
+                    $user_base_role = trim(preg_replace('/\s*\(Head\)$/i', '', $user_base_role));
+                }
+
+                // NORMALIZE both strings to use a standard hyphen to be resilient against data inconsistency (e.g. – vs -)
+                $normalized_expected_dept = str_replace(['–', '—'], '-', (string)$expected_dept_at_this_stage);
+                $normalized_user_base_role = str_replace(['–', '—'], '-', (string)$user_base_role);
+                if ($normalized_expected_dept === $normalized_user_base_role) {
+                    $is_authorized_to_receive = true;
+                }
+            }
+
+            if (empty($error_msg) && !$is_authorized_to_receive) {
+                $error_msg = "Sequence Error: This document is not currently at your stage in the workflow. It is at stage " . $v_stage . " (" . htmlspecialchars($expected_dept_at_this_stage ?? 'N/A') . ").";
             }
         }
 
         // If all checks pass, proceed with receiving.
         if (empty($error_msg)) {
             $recv_stmt = $conn->prepare("INSERT INTO audit_logs (voucher_code, department, action_taken, remarks, processed_by_user_id) VALUES (?, ?, 'Scan-to-Receive', 'Physical document received at station', ?)");
-            $recv_stmt->bind_param("ssi", $receive_id, $base_dept_role, $user_id);
+            $recv_stmt->bind_param("ssi", $receive_id, $dept_role, $user_id);
             if ($recv_stmt->execute()) {
                 $success_msg = "Voucher <strong>$receive_id</strong> from <strong>$requestor_name</strong> successfully received.<br><span style='font-size: 0.9rem;'>It is now pending in the Approval Queue.</span>";
 

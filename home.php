@@ -146,7 +146,7 @@ if ($is_signatory) {
                 SELECT 1 FROM audit_logs al
                 WHERE al.voucher_code = v.voucher_code
                 AND al.action_taken = 'Scan-to-Receive'
-                AND al.department = ?
+                AND al.department LIKE ?
             )
             AND (
                 -- Case 1: Custom workflow step matches user's department
@@ -170,7 +170,8 @@ if ($is_signatory) {
             )
 SQL;
     $en_route_stmt = $conn->prepare($en_route_sql);
-    $en_route_stmt->bind_param("sssiis", $base_dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role);
+    $like_param = $base_dept_role . '%';
+    $en_route_stmt->bind_param("sssiis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role);
     $en_route_stmt->execute();
     $en_route_res = $en_route_stmt->get_result();
     while ($row = $en_route_res->fetch_assoc()) {
@@ -206,7 +207,7 @@ if ($my_role === 'Requestor') {
         $sql = <<<'SQL'
             SELECT u.full_name, COUNT(DISTINCT v.voucher_code) as user_pending_count
             FROM vouchers v
-            INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+            INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department LIKE ?
             INNER JOIN users u ON al.processed_by_user_id = u.user_id
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE
@@ -237,14 +238,15 @@ if ($my_role === 'Requestor') {
                 AND NOT EXISTS (
                     SELECT 1 FROM audit_logs al2 
                     WHERE al2.voucher_code = v.voucher_code 
-                    AND al2.department = ?
+                    AND al2.department LIKE ?
                     AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
                 )
             GROUP BY al.processed_by_user_id, u.full_name
             ORDER BY user_pending_count DESC
 SQL;
+        $like_param = $base_dept_role . '%';
         $pending_stmt = $conn->prepare($sql);
-        $pending_stmt->bind_param("sssiisis", $base_dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $base_dept_role);
+        $pending_stmt->bind_param("sssiisis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $like_param);
         $pending_stmt->execute();
         $pending_res = $pending_stmt->get_result();
         while ($row = $pending_res->fetch_assoc()) {
@@ -374,7 +376,7 @@ if ($is_signatory) {
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
             LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
-            JOIN audit_logs al_receive ON v.voucher_code = al_receive.voucher_code AND al_receive.action_taken = 'Scan-to-Receive' AND al_receive.department = ? 
+            JOIN audit_logs al_receive ON v.voucher_code = al_receive.voucher_code AND al_receive.action_taken = 'Scan-to-Receive' AND al_receive.department LIKE ? 
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL 
@@ -403,18 +405,20 @@ if ($is_signatory) {
         -- Case 3: Fallback for default workflow (no JSON)
         OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
     )";
-    $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
+    $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department LIKE ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
 
     // MIS has special privileges to see all documents in its queue, regardless of stage.
     if ($my_role === 'MIS') {
         $sql = $sql_base . $sql_end;
+        $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("ssss", $base_dept_role, $first_day_of_month, $last_day_of_month, $base_dept_role);
+        $deadline_stmt->bind_param("ssss", $like_param, $first_day_of_month, $last_day_of_month, $like_param);
     } else {
         // Regular signatories see documents only at their specific stage.
         $sql = $sql_base . $sql_where_stage . $sql_end;
+        $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("sssssiisis", $base_dept_role, $first_day_of_month, $last_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $base_dept_role);
+        $deadline_stmt->bind_param("sssssiisis", $like_param, $first_day_of_month, $last_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $like_param);
     }
 } else {
     // Requestors see the deadlines for their own submitted documents.

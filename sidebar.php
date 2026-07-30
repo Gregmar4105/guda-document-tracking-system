@@ -126,7 +126,7 @@ $dot_color = '#10b981';
         <?php if ($is_mis): ?>
             <a href="list.php?view=my" class="<?php echo ($current_page == 'list.php' && ($_GET['view'] ?? '') === 'my') ? 'active' : ''; ?>">My Document History</a>
         <?php else: ?>
-            <a href="list.php?view=my" class="<?php echo ($current_page == 'list.php') ? 'active' : ''; ?>">My Document History</a>
+            <a href="list.php" class="<?php echo ($current_page == 'list.php') ? 'active' : ''; ?>">My Document History</a>
         <?php endif; ?>
 
     <?php if ($is_mis || $user_role === 'Human Resource Management Services Division' || $is_acct_head): ?>

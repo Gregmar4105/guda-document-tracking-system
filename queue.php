@@ -42,7 +42,7 @@ while ($row = $seq_res->fetch_assoc()) {
 }
 
 $my_stage_index = -1;
-$found_index = array_search($base_dept_role, $workflow_sequence);
+$found_index = array_search($dept_role, $workflow_sequence);
 if ($found_index !== false) {
     $my_stage_index = $found_index + 1; // 1-based index for stages
 }
@@ -85,14 +85,14 @@ SQL;
         $sql = sprintf($sql_base, $join_sql);
         $pending_stmt = $conn->prepare($sql);
         // The first ? is in the JOIN, the second is in the NOT EXISTS.
-        $pending_stmt->bind_param("ss", $base_dept_role, $base_dept_role);
+        $pending_stmt->bind_param("ss", $dept_role, $dept_role);
     } else {
         // MIS STAFF: Sees only documents they personally scanned.
         $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?";
         $sql = sprintf($sql_base, $join_sql);
         $pending_stmt = $conn->prepare($sql);
         // The first two ? are in the JOIN, the third is in the NOT EXISTS.
-        $pending_stmt->bind_param("sis", $base_dept_role, $user_id, $base_dept_role);
+        $pending_stmt->bind_param("sis", $dept_role, $user_id, $dept_role);
     }
 } else {
     // Regular signatories must follow the workflow sequence.
@@ -145,7 +145,7 @@ SQL;
         ORDER BY al.log_id DESC
 SQL;
     $pending_stmt = $conn->prepare($sql);
-    $pending_stmt->bind_param("sssiisis", $base_dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $base_dept_role);
+    $pending_stmt->bind_param("sssiisis", $dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $dept_role);
 }
 
 $pending_stmt->execute();
@@ -529,7 +529,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                     // Insert the final action log. This stamps the exact TIME OUT.
                     $log_stmt = $conn->prepare("INSERT INTO audit_logs (voucher_code, department, action_taken, remarks, processed_by_user_id) VALUES (?, ?, ?, ?, ?)");
                     if ($log_stmt) {
-                        $log_stmt->bind_param("ssssi", $processed_id, $base_dept_role, $log_action, $remarks, $user_id);
+                        $log_stmt->bind_param("ssssi", $processed_id, $dept_role, $log_action, $remarks, $user_id);
                         $log_stmt->execute();
                         $log_stmt->close();
                     }

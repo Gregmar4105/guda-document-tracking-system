@@ -107,7 +107,7 @@
                             <button type="button" class="btn btn-small btn-cancel" onclick="toggleVoucherEditView(<?php echo $v_type['id']; ?>)">Cancel</button>
                         </div>
                     </form>
-                    <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($v_type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
+                    <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($v_type['name']); ?>\'? This cannot be undone.');" style="position: absolute; bottom: 20px; right: 20px;">
                         <input type="hidden" name="voucher_type_id" value="<?php echo $v_type['id']; ?>">
                         <button type="submit" name="delete_voucher_type" class="btn btn-small btn-delete-single">Delete</button>
                     </form>

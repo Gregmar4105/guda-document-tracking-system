@@ -111,7 +111,7 @@
                             </div>
                         </form>
                         <!-- Form for DELETE (not nested) -->
-                        <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
+                        <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($type['name']); ?>\'? This cannot be undone.');" style="position: absolute; bottom: 20px; right: 20px;">
                             <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
                             <button type="submit" name="delete_single_doc_type" class="btn btn-small btn-delete-single">Delete</button>
                         </form>

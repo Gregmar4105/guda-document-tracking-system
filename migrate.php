@@ -393,10 +393,23 @@ applyMigration('add_force_password_change_feature_20240716', [
 ], $conn);
 
 // Migration 26: Add category column for HR analytics
-applyMigration('add_category_to_doc_and_voucher_types_20240717', [
-    "ALTER TABLE `document_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`",
-    "ALTER TABLE `voucher_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`"
-], $conn);
+$doc_col_exists = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'document_types' AND column_name = 'category'")->fetch_assoc()['c'];
+$vt_col_exists = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'voucher_types' AND column_name = 'category'")->fetch_assoc()['c'];
+
+if ($doc_col_exists && $vt_col_exists) {
+    // Both columns already exist; record migration as applied to avoid duplicate errors
+    $stmt = $conn->prepare("INSERT IGNORE INTO migrations (migration_name) VALUES (?)");
+    $name = 'add_category_to_doc_and_voucher_types_20240717';
+    $stmt->bind_param('s', $name);
+    $stmt->execute();
+    $stmt->close();
+    echo "<p style='color: gray;'>Migration 'add_category_to_doc_and_voucher_types_20240717' already applied (columns exist). Skipping.</p>";
+} else {
+    applyMigration('add_category_to_doc_and_voucher_types_20240717', [
+        "ALTER TABLE `document_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`",
+        "ALTER TABLE `voucher_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`"
+    ], $conn);
+}
 
 $conn->close();
 echo "<p>Migration process complete.</p>";

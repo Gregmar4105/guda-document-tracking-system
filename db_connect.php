@@ -4,37 +4,15 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
-$db_user = "guda_database";
-$db_pass = "password123";
+$host = "127.0.0.1";
+$db_user = "root";
+$db_pass = "root";
 $db_name = "gudaDB";
-$port = 20707;
+$port = 3306;
 
-// Define the path to your Aiven CA certificate.
-// You must download this file from your Aiven project's overview page
-// and place it in the same directory as this file.
-$ssl_ca_path = __DIR__ . '/ca.pem';
-
-// Aiven cloud databases require an SSL connection.
-// We must initialize mysqli and use real_connect with the SSL flag.
-$conn = mysqli_init();
-if (!$conn) {
-    die("mysqli_init failed. The server's PHP environment may not support MySQLi.");
-}
-// Set SSL certificate for a secure, verified connection.
-if (file_exists($ssl_ca_path)) {
-    mysqli_ssl_set($conn, NULL, NULL, $ssl_ca_path, NULL, NULL);
-}
-
-// Connect using SSL and verify the server's certificate against the provided CA.
-// This is the most secure method. If this fails in your hosting environment,
-// you may need to revert to MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT, but this is less secure.
-if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL)) {
-    $error_message = mysqli_connect_error();
-    if (strpos($error_message, 'SSL') !== false && !file_exists($ssl_ca_path)) {
-        $error_message .= " <strong>ACTION REQUIRED:</strong> The Aiven CA certificate (ca.pem) was not found. Please download it from your Aiven project dashboard and place it in the project's root directory.";
-    }
-    die("Database Connection Failed: " . $error_message);
+$conn = @new mysqli($host, $db_user, $db_pass, $db_name, $port);
+if ($conn->connect_error) {
+    die("Database Connection Failed: " . $conn->connect_error);
 }
 
 // Set character set to utf8mb4 to support a wider range of characters and prevent encoding issues.

@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure Apache to listen on port 8000
-RUN sed -i 's/80/8000/g' /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf
+# Suppress ServerName warning globally
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+# Configure Apache to listen on both port 80 and port 8000
+RUN printf "Listen 80\nListen 8000\n" > /etc/apache2/ports.conf
 
 # Configure custom virtual host
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
@@ -27,7 +30,8 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/
 # Ensure proper permissions for web server
 RUN chown -R www-data:www-data /var/www/html
 
-# Expose port 8000 as requested
+# Expose both port 80 and port 8000 for flexible Coolify routing
+EXPOSE 80
 EXPOSE 8000
 
 ENTRYPOINT ["docker-entrypoint.sh"]

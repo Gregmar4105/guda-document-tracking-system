@@ -4,22 +4,63 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
-$port = 20707;
-$db_user = "guda_database";
-$db_pass = "password123";
-$db_name = "gudaDB";
+// Defaults provided for Coolify deployment
+$host = "lc1q06oqxhucdtxiejsvdf66";
+$port = 3306;
+$db_user = "mysql";
+$db_pass = "guda-mysql";
+$db_name = "default";
+$use_ssl = false;
+
+// 1. Support DATABASE_URL / MYSQL_URL connection strings (e.g., mysql://user:pass@host:3306/dbname)
+$database_url = getenv('DATABASE_URL') ?: getenv('MYSQL_URL');
+if ($database_url) {
+    $parsed_url = parse_url($database_url);
+    if ($parsed_url) {
+        if (!empty($parsed_url['host'])) $host = $parsed_url['host'];
+        if (!empty($parsed_url['port'])) $port = (int)$parsed_url['port'];
+        if (!empty($parsed_url['user'])) $db_user = urldecode($parsed_url['user']);
+        if (isset($parsed_url['pass'])) $db_pass = urldecode($parsed_url['pass']);
+        if (!empty($parsed_url['path'])) {
+            $db_name = ltrim($parsed_url['path'], '/');
+        }
+    }
+}
+
+// 2. Allow individual environment variables to override
+if (getenv('DB_HOST')) $host = getenv('DB_HOST');
+if (getenv('DB_PORT')) $port = (int)getenv('DB_PORT');
+if (getenv('DB_USER')) $db_user = getenv('DB_USER');
+if (getenv('DB_USERNAME')) $db_user = getenv('DB_USERNAME');
+if (getenv('DB_PASS') !== false) $db_pass = getenv('DB_PASS');
+if (getenv('DB_PASSWORD') !== false) $db_pass = getenv('DB_PASSWORD');
+if (getenv('DB_NAME')) $db_name = getenv('DB_NAME');
+if (getenv('DB_DATABASE')) $db_name = getenv('DB_DATABASE');
+
+// 3. SSL Configuration (auto-enabled for Aiven, or explicitly via DB_SSL)
+$db_ssl_env = getenv('DB_SSL');
+if ($db_ssl_env !== false) {
+    $use_ssl = filter_var($db_ssl_env, FILTER_VALIDATE_BOOLEAN);
+} elseif (strpos($host, 'aivencloud.com') !== false) {
+    $use_ssl = true;
+}
 
 $conn = mysqli_init();
 if (!$conn) {
     die("Database Connection Failed: mysqli_init failed");
 }
 
-// Enable SSL as required by Aiven MySQL
-$conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
+$conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
 
-if (!@$conn->real_connect($host, $db_user, $db_pass, $db_name, $port, NULL, MYSQLI_CLIENT_SSL)) {
-    die("Database Connection Failed: " . mysqli_connect_error());
+if ($use_ssl) {
+    $conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
+    if (!@$conn->real_connect($host, $db_user, $db_pass, $db_name, $port, NULL, MYSQLI_CLIENT_SSL)) {
+        die("Database Connection Failed: " . mysqli_connect_error());
+    }
+} else {
+    if (!@$conn->real_connect($host, $db_user, $db_pass, $db_name, $port)) {
+        die("Database Connection Failed: " . mysqli_connect_error());
+    }
 }
 
 // Set character set to utf8mb4 to support a wider range of characters and prevent encoding issues.

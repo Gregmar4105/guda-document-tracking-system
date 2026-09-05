@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+.agents
+.vscode
+.idea
+All-Codes.docx
+CLEANUP_TODO.md
+TODO.md
+erd.md
+*.log
+.env

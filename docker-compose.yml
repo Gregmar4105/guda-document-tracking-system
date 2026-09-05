@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docu_tracking_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql://mysql:guda-mysql@lc1q06oqxhucdtxiejsvdf66:3306/default
+      - DB_HOST=lc1q06oqxhucdtxiejsvdf66
+      - DB_PORT=3306
+      - DB_USER=mysql
+      - DB_PASSWORD=guda-mysql
+      - DB_NAME=default
+      - DB_SSL=false
+      - APP_URL=http://localhost:8000
+      - AUTO_MIGRATE=false
+    networks:
+      - coolify_net
+
+networks:
+  coolify_net:
+    name: coolify
+    external: true

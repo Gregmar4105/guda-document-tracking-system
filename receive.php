@@ -71,7 +71,7 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
 
         // WORKFLOW RULE: For non-admins, validate the sequence.
         // MIS is exempt from strict sequence validation. VPAA will now follow standard workflow rules.
-        if (empty($error_msg) && $dept_role !== 'MIS') {
+        if (empty($error_msg) && $dept_role !== 'Management Information System Office') {
             $current_stage_0_indexed = $v_stage - 1;
             $expected_dept_at_this_stage = $doc_workflow[$current_stage_0_indexed] ?? null;
             $is_head_route = (strpos($expected_dept_at_this_stage, '(Head)') !== false) || ($expected_dept_at_this_stage === 'Department Head');

@@ -1,0 +1,42 @@
+name: Deploy to Ubuntu Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Application
+    runs-on: [self-hosted, guda-dts]
+
+    steps:
+      - name: Checkout / Update Codebase
+        run: |
+          echo "=== Navigating to project directory ==="
+          cd /sites/guda-document-tracking-system
+          
+          echo "=== Fetching and Pulling latest changes ==="
+          git config --global --add safe.directory /sites/guda-document-tracking-system || true
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Run Database Migrations
+        run: |
+          cd /sites/guda-document-tracking-system
+          if [ -f "migrate.php" ]; then
+            echo "=== Migration file found (migrate.php). Executing database migrations... ==="
+            php migrate.php
+          else
+            echo "=== No migrate.php file found. Skipping migrations. ==="
+          fi
+
+      - name: Syntax & Health Check
+        run: |
+          cd /sites/guda-document-tracking-system
+          echo "=== Verifying PHP Syntax for core files ==="
+          php -l index.php
+          php -l db_connect.php
+          php -l migrate.php
+          echo "=== Deployment Successfully Completed! ==="

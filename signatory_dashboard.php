@@ -2,13 +2,21 @@
 // signatory_dashboard.php
 
 // --- Example DB Connection (replace with your actual connection) ---
-$host = '127.0.0.1';
-$db   = 'naap_document_system'; // Changed to specified database name
-$user = 'root';
-$pass = '';
+$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
+$db   = "gudaDB";
+$user = "guda_database";
+$pass = "password123";
+$port = 20707;
 $charset = 'utf8mb4';
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC];
+$dsn = "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
+// Aiven requires an SSL connection. These options attempt to enable it for PDO.
+// If the connection still fails, you must download the CA certificate from your Aiven dashboard
+// and provide the correct file path for 'PDO::MYSQL_ATTR_SSL_CA'.
+$options = [
+    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, 
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::MYSQL_ATTR_SSL_CA => '', // This attempts to enable SSL. A valid path to a ca.pem file is strongly recommended.
+];
 try {
      $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (\PDOException $e) {

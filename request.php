@@ -588,12 +588,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             docTitleInput.readOnly = true; // Prevent user from changing it
             purposeTextarea.focus();
 
-            // Auto-select the 'Financial Voucher' document type and disable the dropdown
-            if (defaultFinancialDocTypeId) {
-                docTypeSelect.value = defaultFinancialDocTypeId;
-                docTypeSelect.disabled = true;
-            }
-            handleVoucherTypeChange(); // NEW: Set the context for financial vouchers
+            // Hide the Document Type group entirely and make it not required.
+            // The server-side logic will handle setting doc_type_id to NULL for financial transactions.
+            docTypeGroup.style.display = 'none';
+            docTypeSelect.required = false;
+            docTypeSelect.value = ''; // Clear any previous selection
+
+            handleVoucherTypeChange(); // Set the context for financial vouchers
 
             // Reset and lock the workflow until a financial type is chosen
             currentRoute = [];
@@ -603,8 +604,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             amountInput.required = false;
             docTitleInput.value = '';
             docTitleInput.readOnly = false;
-            docTypeSelect.value = '';
-            docTypeSelect.disabled = false;
+
+            // Show the Document Type group and make it required again
+            docTypeGroup.style.display = 'block';
+            docTypeSelect.required = true;
 
             // Re-evaluate the doc type to restore its workflow
             handleDocTypeChange();

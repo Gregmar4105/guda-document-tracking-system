@@ -1,0 +1,65 @@
+/* Shared layout utilities - non-color changes only
+   Purpose: standardize spacing, container widths, responsive grids, card padding, and form sizing
+   This file intentionally avoids color overrides so theme/colors remain unchanged.
+*/
+
+html,body{height:100%;}
+
+/* Page container and main content */
+.main-content{box-sizing:border-box; max-width:1200px; margin:0 auto; padding:40px 20px;}
+.container{max-width:1100px; margin:0 auto; width:100%; box-sizing:border-box;}
+
+/* Page header spacing */
+.page-header{margin-bottom:28px;padding-bottom:12px}
+.page-header h1{font-size:1.9rem;margin:0}
+.page-header p{margin:6px 0 0;font-size:0.95rem}
+
+/* Card utility (no color changes) */
+.card{padding:20px;border-radius:8px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+.card-title{margin:0 0 8px;padding-bottom:0}
+.card-body{overflow:auto}
+.card-footer{margin-top:12px}
+
+/* Responsive grid for settings and dashboard cards */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+@media (max-width:992px){.settings-grid{grid-template-columns:1fr}}
+
+/* Form spacing */
+.input-group{margin-bottom:16px}
+label{display:block;margin-bottom:6px;font-weight:600}
+input[type=text],input[type=password],input[type=email],input[type=date],select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:4px}
+
+/* Buttons: keep existing colors but ensure consistent sizing */
+.btn{padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer}
+.btn-small{padding:8px 12px;border-radius:6px}
+
+/* Lists and items */
+.user-list,.workflow-list{list-style:none;padding:0;margin:0}
+.user-item,.doc-type-item,.dept-item{box-sizing:border-box;padding:12px;border-radius:6px;margin-bottom:12px}
+
+/* Sidebar / main layout helpers (do not change widths/colors here) */
+.sidebar + .main-content, .main-content{min-height:calc(100vh - 0px)}
+
+/* Utility helpers */
+.hide-mobile{display:inline}
+@media (max-width:600px){.hide-mobile{display:none}}
+
+/* Accessibility helpers: focus outlines for interactive elements */
+button:focus, a:focus, input:focus, select:focus, textarea:focus{outline-offset:2px}
+
+/* Ensure form controls don't overflow in compact UIs */
+.table-responsive{overflow:auto}
+
+/* Keep spacing consistent for headers inside cards */
+.card h3,.card h4{margin:0}
+
+/* Small tweak for long forms to prevent extremely long single-column layouts */
+.form-two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:720px){.form-two-col{grid-template-columns:1fr}}
+
+/* Desktop layout: account for fixed sidebar width (260px) so content isn't covered */
+@media (min-width: 992px) {
+    .main-content { margin-left: 260px; max-width: calc(100% - 260px); padding: 60px 30px; }
+}
+
+/* End of layout utilities */

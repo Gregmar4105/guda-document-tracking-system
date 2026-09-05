@@ -78,7 +78,7 @@
                     </div>
                     <div class="edit-view" style="position: relative;">
                         <!-- Form for UPDATE -->
-                        <form method="POST">
+                        <form method="POST" style="margin-top: 15px;">
                             <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
                             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
                                 <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars($type['name']); ?>" required>
@@ -105,15 +105,10 @@
                                     <input type="hidden" name="doc_type_workflow" class="workflowInput" value="<?php echo htmlspecialchars($type['default_workflow'] ?? '[]', ENT_QUOTES); ?>">
                                 </div>
                             </div>
-                            <div class="edit-actions">
+                            <div class="edit-actions" style="display:flex; gap:10px; align-items:center;">
                                 <button type="submit" name="update_doc_type" class="btn btn-small">Save Changes</button>
                                 <button type="button" class="btn btn-small btn-cancel" onclick="toggleEditView(<?php echo $type['id']; ?>)">Cancel</button>
                             </div>
-                        </form>
-                        <!-- Form for DELETE (not nested) -->
-                        <form method="POST" onsubmit="return confirm('Are you sure you want to permanently delete \'<?php echo htmlspecialchars($type['name']); ?>\'? This cannot be undone.');" style="position: absolute; top: 20px; right: 20px;">
-                            <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
-                            <button type="submit" name="delete_single_doc_type" class="btn btn-small btn-delete-single">Delete</button>
                         </form>
                     </div>
                 </div>

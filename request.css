@@ -23,17 +23,17 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
 }
 
 .page-header { border-bottom: 3px solid var(--naap-gold); margin-bottom: 30px; padding-bottom: 10px; }
-.page-header h1 { color: var(--naap-navy); margin: 0; }
-.page-header p { color: var(--text-muted); margin: 5px 0 0 0; }
+.page-header h1 { color: var(--naap-navy); margin: 0; font-weight: 700; }
+.page-header p { color: var(--text-muted); margin: 5px 0 0 0; font-weight: 500; }
 
 .alert-error { background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #fecaca; }
 
 .form-container { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid var(--naap-navy); }
-.section-title { color: var(--naap-navy); border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.1rem; }
+.section-title { color: var(--naap-navy); border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.2rem; font-weight: 600; }
 
 .input-group { margin-bottom: 15px; }
 label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; color: var(--text-dark); }
-input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border-light); border-radius: 6px; box-sizing: border-box; font-size: 0.95rem; background-color: #fff; }
+input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border-light); border-radius: 6px; box-sizing: border-box; font-size: 1rem; background-color: #fff; font-weight: 500; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--naap-navy); box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.1); }
 
 .main-content::-webkit-scrollbar {

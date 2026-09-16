@@ -110,11 +110,39 @@ if ($can_view_all_analytics) {
     <link rel="stylesheet" href="layout.css">
     <link rel="stylesheet" href="analytics.css">
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: #f1f5f9;
+        }
+
+        .main-container {
+            width: calc(100% - 260px);
+            min-height: 100vh;
+            margin-left: 260px;
+            padding: 32px 36px 48px;
+        }
+
+        .top-nav {
+            max-width: 1400px;
+            margin: 0 auto 24px !important;
+            padding: 24px 28px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+        }
+
+        .top-nav h1 {
+            font-size: clamp(1.6rem, 2.4vw, 2.25rem);
+        }
+
         .analytics-container {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 2rem;
-            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0;
         }
 
         .metric-card {
@@ -200,6 +228,21 @@ if ($can_view_all_analytics) {
             gap: 1rem;
             flex-wrap: wrap;
             align-items: center;
+        }
+
+        .filter-group form {
+            display: flex;
+            align-items: center;
+        }
+
+        .filter-group select {
+            width: auto;
+            min-width: 180px;
+            max-width: min(420px, 55vw);
+        }
+
+        .filters .filter-group:nth-child(2) select {
+            min-width: 280px;
         }
 
         .filter-group {
@@ -332,6 +375,9 @@ if ($can_view_all_analytics) {
             text-align: center;
             padding: 2rem;
             color: #999;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
         }
 
         .summary-grid {
@@ -706,6 +752,8 @@ if ($can_view_all_analytics) {
         @media (max-width: 768px) {
             .main-container {
                 margin-left: 0;
+                width: 100%;
+                padding: 20px 16px 32px;
             }
 
             .analytics-container {
@@ -719,6 +767,22 @@ if ($can_view_all_analytics) {
             .filters {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+
+            .filter-group,
+            .filter-group form,
+            .filter-group select,
+            .filters .filter-group:nth-child(2) select {
+                width: 100%;
+                max-width: none;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .tab-btn {
+                flex: 1 1 180px;
             }
         }
     </style>

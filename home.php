@@ -472,6 +472,11 @@ foreach ($documents_for_calendar as $doc) {
     foreach ($period as $date) {
         $date_str = $date->format('Y-m-d');
         
+        // SKIP dates outside the current month view
+        if ($date_str < $first_day_of_month || $date_str > $last_day_of_month) {
+            continue;
+        }
+        
         // COLOR LOGIC
         if ($date_str == $start_date->format('Y-m-d')) {
             $color = 'green'; // Day 1

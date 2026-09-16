@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Prevent web crawlers from indexing sensitive backend scripts and database files
+Disallow: /config.php
+Disallow: /db_connect.php
+Disallow: /import_db.php
+Disallow: /migrate.php
+Disallow: /*.sql$

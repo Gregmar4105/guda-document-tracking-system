@@ -377,16 +377,15 @@ if ($is_signatory) {
     }
 
     // Base SQL for all signatories
-    $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(al_receive.created_at) as start_date, al.processing_days 
+    $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(v.date_submitted) as start_date, al.processing_days 
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
             LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
-            JOIN audit_logs al_receive ON v.voucher_code = al_receive.voucher_code AND al_receive.action_taken = 'Scan-to-Receive' AND al_receive.department LIKE ? 
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL 
-            AND (DATE(al_receive.created_at) <= ? AND v.arta_deadline >= ?)";
+            AND (DATE(v.date_submitted) <= ? AND v.arta_deadline >= ?)";
 
     $sql_where_stage = " AND (
         -- Case 1: Custom workflow step matches user's department
@@ -425,13 +424,13 @@ if ($is_signatory) {
         $sql = $sql_base . $sql_end;
         $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("ssss", $like_param, $last_day_of_month, $first_day_of_month, $like_param);
+        $deadline_stmt->bind_param("sss", $last_day_of_month, $first_day_of_month, $like_param);
     } else {
         // Regular signatories see documents only at their specific stage.
         $sql = $sql_base . $sql_where_stage . $sql_end;
         $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("sssssiisiis", $like_param, $last_day_of_month, $first_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $my_user_id, $like_param);
+        $deadline_stmt->bind_param("ssssiisiis", $last_day_of_month, $first_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $my_user_id, $like_param);
     }
 } else {
     // Requestors see the deadlines for their own submitted documents.

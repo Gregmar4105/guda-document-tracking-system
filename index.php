@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NAAP Voucher System - Landing</title>
+    <title>NAAP Villamor Document Tracking System</title>
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -12,13 +12,13 @@
     <div class="header-section">
         <h3>REPUBLIC OF THE PHILIPPINES</h3>
         <h1>NATIONAL AVIATION ACADEMY OF THE PHILIPPINES</h1>
-        <h4>Web-Based Voucher Workflow System with Rule-Based Validation</h4>
+        <h4>Web-Based Document Tracking System with Rule-Based Workflow</h4>
     </div>
 
     <div class="main-content">
         <div class="intro-text">
-            <h3>Digitizing Accounting Workflows</h3>
-            <p>This platform replaces manual, paper-based systems at the NAAP Accounting Office to improve efficiency and transparency.</p>
+            <h3>Digitizing Document Workflows</h3>
+            <p>This platform replaces manual, paper-based document processing at NAAP Villamor to improve efficiency, transparency, and accountability.</p>
             
             <ul class="features-list">
                 <li><strong>Automate Processing</strong>: Reduces time for preparation and approval.</li>
@@ -38,7 +38,7 @@
 
 
 <div class="floating-btn-container">
-    <a href="login.php" class="btn-access"> Access Voucher System</a>
+    <a href="login.php" class="btn-access">Access Document Tracking System</a>
 </div>
 
 </body>

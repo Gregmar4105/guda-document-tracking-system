@@ -4,11 +4,11 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
-$db_user = "guda_database";
-$db_pass = "password123";
-$db_name = "gudaDB";
-$port = 20707;
+$host = "lc1q06oqxhucdtxiejsvdf66";
+$db_user = "mysql";
+$db_pass = "guda-mysql";
+$db_name = "default";
+$port = 3306;
 
 $conn = new mysqli($host, $db_user, $db_pass, $db_name, $port);
 if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_error); }

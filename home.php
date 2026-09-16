@@ -377,7 +377,7 @@ if ($is_signatory) {
     }
 
     // Base SQL for all signatories
-    $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, al_receive.created_at as start_date, al.processing_days 
+    $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(al_receive.created_at) as start_date, al.processing_days 
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
@@ -386,7 +386,7 @@ if ($is_signatory) {
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL 
-            AND (al_receive.created_at <= ? AND v.arta_deadline >= ?)";
+            AND (DATE(al_receive.created_at) <= ? AND v.arta_deadline >= ?)";
 
     $sql_where_stage = " AND (
         -- Case 1: Custom workflow step matches user's department
@@ -435,7 +435,7 @@ if ($is_signatory) {
     }
 } else {
     // Requestors see the deadlines for their own submitted documents.
-    $sql = "SELECT v.voucher_code, v.document_title, v.arta_deadline, v.date_submitted as start_date, al.processing_days 
+    $sql = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(v.date_submitted) as start_date, al.processing_days 
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
@@ -443,7 +443,7 @@ if ($is_signatory) {
             WHERE v.requestor_id = ? 
             AND v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL 
-            AND (v.arta_deadline >= ? AND v.date_submitted <= ?)";
+            AND (v.arta_deadline >= ? AND DATE(v.date_submitted) <= ?)";
     $deadline_stmt = $conn->prepare($sql);
     $deadline_stmt->bind_param("iss", $my_user_id, $first_day_of_month, $last_day_of_month);
 }

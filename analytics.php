@@ -184,9 +184,10 @@ $avg_stay_times_seconds = []; // For Chart.js
 foreach ($stay_times_per_dept as $dept => $data) {
     if ($data['count'] > 0) {
         $avg_seconds = $data['total_seconds'] / $data['count'];
-        $days = floor($avg_seconds / 86400);
-        $hours = floor(($avg_seconds % 86400) / 3600);
-        $minutes = floor(($avg_seconds % 3600) / 60);
+        $avg_seconds_int = (int) floor($avg_seconds);
+        $days = intdiv($avg_seconds_int, 86400);
+        $hours = intdiv($avg_seconds_int % 86400, 3600);
+        $minutes = intdiv($avg_seconds_int % 3600, 60);
         $avg_stay_times_formatted[$dept] = "{$days}d {$hours}h {$minutes}m";
         $avg_stay_times_seconds[$dept] = round($avg_seconds / 3600, 2); // Store in hours for chart
     } else {

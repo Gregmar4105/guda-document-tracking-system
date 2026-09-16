@@ -178,8 +178,6 @@ body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-gray); ma
 .calendar-table td.highlight-orange .day-number { color: #c2410c; font-weight: 900; }
 .calendar-table td.highlight-red { background-color: #fee2e2; border: 1px solid #ef4444; }
 .calendar-table td.highlight-red .day-number { color: #b91c1c; font-weight: 900; }
-.calendar-table td.today { background-color: #eef2ff; }
-.calendar-table td.today .day-number { background-color: var(--naap-navy); color: white; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
 
 /* Tooltip on Hover Styles */
 .doc-count { font-size: 0.8rem; font-weight: 700; background: rgba(0,0,0,0.5); color: white; padding: 2px 6px; border-radius: 10px; margin-top: 5px; display: inline-block; line-height: 1; }

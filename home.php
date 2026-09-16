@@ -69,8 +69,6 @@ function build_calendar($month, $year, $highlights = []) {
         if (isset($highlights[$currentDateStr])) {
             $class .= ' highlight-' . $highlights[$currentDateStr]['color'];
         }
-        if ($currentDateStr == date('Y-m-d')) { $class .= ' today'; } // Current day highlight
-        
         $cell_content = "<span class='day-number'>$currentDay</span>";
 
         if (isset($highlights[$currentDateStr]['documents'])) {
@@ -466,26 +464,20 @@ foreach ($documents_for_calendar as $doc) {
     // The period should include the end date, so we modify it to the next day for the interval.
     $period_end_date = (clone $deadline_date)->modify('+1 day');
     
-    $period = new DatePeriod($start_date, new DateInterval('P1D'), $period_end_date);
+    $start_date_str = $start_date->format('Y-m-d');
+    $deadline_date_str = $deadline_date->format('Y-m-d');
 
-    foreach ($period as $date) {
-        $date_str = $date->format('Y-m-d');
-        
-        // SKIP dates outside the current month view
+    foreach ([$start_date_str, $deadline_date_str] as $date_str) {
         if ($date_str < $first_day_of_month || $date_str > $last_day_of_month) {
             continue;
         }
-        
-        // COLOR LOGIC
-        if ($date_str == $start_date->format('Y-m-d')) {
-            $color = 'green'; // Day 1
-        } elseif ($date_str == $deadline_date->format('Y-m-d')) {
-            $color = 'red'; // FINAL DAY (deadline)
+
+        if ($date_str == $start_date_str) {
+            $color = 'green';
         } else {
-            $color = 'orange'; // In progress
+            $color = 'red';
         }
 
-        // Initialize if not exists
         if (!isset($date_highlights[$date_str])) {
             $date_highlights[$date_str] = [
                 'color' => '',
@@ -493,17 +485,14 @@ foreach ($documents_for_calendar as $doc) {
             ];
         }
 
-        // PRIORITY: red > orange > green
         $existing = $date_highlights[$date_str]['color'];
         if (
             $color === 'red' ||
-            ($color === 'orange' && $existing !== 'red') ||
             ($color === 'green' && empty($existing))
         ) {
             $date_highlights[$date_str]['color'] = $color;
         }
 
-        // STORE DOCUMENT (NO DUPLICATES)
         $voucher_code = $doc['voucher_code'] ?? null;
         if ($voucher_code) {
             $date_highlights[$date_str]['documents'][$voucher_code] = $doc;

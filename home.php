@@ -461,21 +461,26 @@ foreach ($documents_for_calendar as $doc) {
 
     $start_date = new DateTime($doc['start_date']);
     $deadline_date = new DateTime($doc['arta_deadline']);
-    // The period should include the end date, so we modify it to the next day for the interval.
+    // Include every date from the request date through the deadline.
     $period_end_date = (clone $deadline_date)->modify('+1 day');
-    
+
     $start_date_str = $start_date->format('Y-m-d');
     $deadline_date_str = $deadline_date->format('Y-m-d');
 
-    foreach ([$start_date_str, $deadline_date_str] as $date_str) {
+    $period = new DatePeriod($start_date, new DateInterval('P1D'), $period_end_date);
+    foreach ($period as $date) {
+        $date_str = $date->format('Y-m-d');
+
         if ($date_str < $first_day_of_month || $date_str > $last_day_of_month) {
             continue;
         }
 
         if ($date_str == $start_date_str) {
             $color = 'green';
-        } else {
+        } elseif ($date_str == $deadline_date_str) {
             $color = 'red';
+        } else {
+            $color = 'orange';
         }
 
         if (!isset($date_highlights[$date_str])) {
@@ -488,6 +493,7 @@ foreach ($documents_for_calendar as $doc) {
         $existing = $date_highlights[$date_str]['color'];
         if (
             $color === 'red' ||
+            ($color === 'orange' && $existing !== 'red') ||
             ($color === 'green' && empty($existing))
         ) {
             $date_highlights[$date_str]['color'] = $color;

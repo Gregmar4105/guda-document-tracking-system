@@ -19,13 +19,15 @@ class BottleneckAnalyzer {
     private $user_role;
     private $is_head;
     private $is_admin;
+    private $can_view_all_analytics;
     
-    public function __construct($conn, $user_id, $user_role, $is_head = false, $is_admin = false) {
+    public function __construct($conn, $user_id, $user_role, $is_head = false, $is_admin = false, $can_view_all_analytics = false) {
         $this->conn = $conn;
         $this->user_id = $user_id;
         $this->user_role = $user_role;
         $this->is_head = $is_head;
         $this->is_admin = $is_admin;
+        $this->can_view_all_analytics = $can_view_all_analytics;
     }
     
     /**
@@ -315,7 +317,7 @@ class BottleneckAnalyzer {
         }
         
         // If a specific department is requested
-        if ($department && $is_management && !$is_mis) {
+        if ($department && $is_management && !$this->can_view_all_analytics && !$is_mis) {
             // Department heads can only see their own department
             if ($this->user_role !== $department) {
                 return [
@@ -327,7 +329,7 @@ class BottleneckAnalyzer {
         
         // Build the department filter for the query
         $dept_filter = '';
-        if ($department && $is_management && !$is_mis) {
+        if ($department && $is_management && !$this->can_view_all_analytics && !$is_mis) {
             $dept_filter = " AND department = '$department'";
         }
         

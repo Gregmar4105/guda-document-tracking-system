@@ -5,6 +5,9 @@ session_start();
 $is_mis = ($_SESSION['role'] ?? '') === 'MIS';
 $is_admin = ($_SESSION['role'] ?? '') === 'Admin';
 $is_head = ($_SESSION['is_head'] ?? 0) == 1;
+$user_role = $_SESSION['role'] ?? '';
+$is_hr_head = $is_head && (stripos($user_role, 'human resource') !== false || preg_match('/\bhr\b/i', $user_role));
+$can_view_all_analytics = $is_mis || $is_admin || $is_hr_head;
 
 if (!isset($_SESSION['logged_in']) || !($is_mis || $is_admin || $is_head)) {
     header("Location: home.php");
@@ -39,10 +42,9 @@ register_shutdown_function(function() {
 });
 
 $user_id = $_SESSION['user_id'] ?? 0;
-$user_role = $_SESSION['role'] ?? '';
 
 // Initialize analyzer
-$analyzer = new BottleneckAnalyzer($conn, $user_id, $user_role, $is_head, $is_admin || $is_mis);
+$analyzer = new BottleneckAnalyzer($conn, $user_id, $user_role, $is_head, $is_admin || $is_mis, $can_view_all_analytics);
 
 // Get parameters
 $view = $_GET['view'] ?? 'overview';
@@ -50,7 +52,7 @@ $department = $_GET['dept'] ?? null;
 $days = intval($_GET['days'] ?? 30);
 
 // For department heads, restrict to their department
-if ($is_head && !$is_mis && !$is_admin) {
+if ($is_head && !$can_view_all_analytics) {
     $department = $user_role;
 }
 
@@ -84,9 +86,9 @@ try {
     error_log('Analytics exception: ' . $e->getMessage());
 }
 
-// Get list of departments for filter (only if MIS or Admin)
+// Get list of departments for users who can view all analytics.
 $departments = [];
-if ($is_mis || $is_admin) {
+if ($can_view_all_analytics) {
     $dept_result = $conn->query("SELECT DISTINCT name FROM departments WHERE is_active = 1 ORDER BY name");
     while ($row = $dept_result->fetch_assoc()) {
         $departments[] = $row['name'];
@@ -388,7 +390,7 @@ if ($is_mis || $is_admin) {
                     </form>
                 </div>
 
-                <?php if ($is_mis || $is_admin): ?>
+                <?php if ($can_view_all_analytics): ?>
                 <div class="filter-group">
                     <label>Department:</label>
                     <form method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
@@ -418,7 +420,7 @@ if ($is_mis || $is_admin) {
                     onclick="window.location.href='?view=bottlenecks&days=<?php echo $days; ?><?php echo $department ? '&dept=' . urlencode($department) : ''; ?>'">
                     ⚠️ Bottleneck Analysis
                 </button>
-                <?php if (!$is_head || $is_mis || $is_admin): ?>
+                <?php if (!$is_head || $can_view_all_analytics): ?>
                 <button class="tab-btn <?php echo $view == 'department' ? 'active' : ''; ?>" 
                     onclick="window.location.href='?view=department&days=<?php echo $days; ?><?php echo $department ? '&dept=' . urlencode($department) : ''; ?>'">
                     📈 Department Details

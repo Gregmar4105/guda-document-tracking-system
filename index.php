@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NAAP Villamor Document Tracking System</title>
+    <title>Document Tracking System</title>
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -38,7 +38,7 @@
 
 
 <div class="floating-btn-container">
-    <a href="login.php" class="btn-access">Access Document Tracking System</a>
+    <a href="login.php" class="btn-access">Access NAAP Document Tracking System</a>
 </div>
 
 </body>

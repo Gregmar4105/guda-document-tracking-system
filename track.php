@@ -364,8 +364,8 @@ if (!empty($selected_id)) {
                 }
                 
                 $diff = time() - strtotime($prev_time);
-                $hours = floor($diff / 3600);
-                $minutes = floor(($diff / 60) % 60);
+                $hours = (int)floor($diff / 3600);
+                $minutes = (int)floor(($diff / 60) % 60);
 
                 $v_data['Logs'][] = [
                     "Dept" => $display_stage_name,

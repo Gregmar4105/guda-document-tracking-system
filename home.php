@@ -475,6 +475,11 @@ foreach ($documents_for_calendar as $doc) {
             continue;
         }
 
+        $day_of_week = (int) $date->format('N');
+        if ($day_of_week >= 6 || in_array($date_str, $holidays, true)) {
+            continue;
+        }
+
         if ($date_str == $start_date_str) {
             $color = 'green';
         } elseif ($date_str == $deadline_date_str) {

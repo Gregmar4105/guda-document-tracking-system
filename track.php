@@ -320,8 +320,8 @@ if (!empty($selected_id)) {
                     elseif (isset($a_row['date_processed'])) $time_out = $a_row['date_processed'];
 
                     $diff = strtotime($time_out) - strtotime($time_in);
-                    $hours = floor($diff / 3600);
-                    $minutes = floor(($diff / 60) % 60);
+                    $hours = intdiv($diff, 3600);
+                    $minutes = intdiv($diff % 3600, 60);
                     
                     $v_data['Logs'][] = [
                         "Dept" => resolve_department_display($a_row['department'], $conn),

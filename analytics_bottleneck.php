@@ -678,7 +678,9 @@ if ($can_view_all_analytics) {
                                 This chart shows average daily processing time. A downward trend indicates improvements; 
                                 upward trends may indicate growing bottlenecks.
                             </p>
-                            <canvas id="trendChart" width="400" height="150"></canvas>
+                            <div class="chart-canvas">
+                                <canvas id="trendChart"></canvas>
+                            </div>
                         </div>
 
                         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -749,6 +751,23 @@ if ($can_view_all_analytics) {
             color: #999;
         }
 
+        .chart-container {
+            height: auto;
+            overflow: hidden;
+        }
+
+        .chart-canvas {
+            position: relative;
+            width: 100%;
+            height: 280px;
+        }
+
+        .chart-canvas canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
         @media (max-width: 768px) {
             .main-container {
                 margin-left: 0;
@@ -783,6 +802,10 @@ if ($can_view_all_analytics) {
 
             .tab-btn {
                 flex: 1 1 180px;
+            }
+
+            .chart-canvas {
+                height: 240px;
             }
         }
     </style>

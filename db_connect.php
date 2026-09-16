@@ -4,11 +4,12 @@
 // Set the default timezone to ensure consistency between PHP and MySQL.
 date_default_timezone_set('Asia/Manila');
 
-$host = "lc1q06oqxhucdtxiejsvdf66";
-$db_user = "mysql";
-$db_pass = "guda-mysql";
-$db_name = "default";
-$port = 3306;
+// Read database configuration from environment variables with fallback to defaults
+$host = getenv('DB_HOST') ?: "lc1q06oqxhucdtxiejsvdf66";
+$db_user = getenv('DB_USER') ?: "mysql";
+$db_pass = getenv('DB_PASSWORD') ?: "guda-mysql";
+$db_name = getenv('DB_NAME') ?: "default";
+$port = (int)(getenv('DB_PORT') ?: 3306);
 
 $conn = new mysqli($host, $db_user, $db_pass, $db_name, $port);
 if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_error); }

@@ -3,8 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <meta name="description" content="National Aviation Academy of the Philippines (NAAP) Web-Based Voucher Workflow System with Rule-Based Validation.">
     <title>NAAP Voucher System - Landing</title>
     <link rel="stylesheet" href="index.css">
 </head>

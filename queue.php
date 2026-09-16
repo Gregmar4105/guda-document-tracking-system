@@ -90,7 +90,8 @@ if ($dept_role === 'MIS') {
             al_arta.processing_days,
             COALESCE(vt.name, dt.name) as effective_doc_type_name,
             u.full_name as requestor_name,
-            u.role as origin_office
+            u.role as origin_office,
+            al.log_id
         FROM vouchers v
         INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
         LEFT JOIN users u ON v.requestor_id = u.user_id

@@ -1,5 +1,10 @@
 <?php
 session_start();
+// Enable runtime error reporting for debugging (remove or disable in production)
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 if (!isset($_SESSION['logged_in'])) { header("Location: login.php"); exit(); }
 
 // To make QR codes scannable as deep links from mobile devices,
@@ -16,6 +21,30 @@ $depts_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 A
 while ($dept_row = $depts_res->fetch_assoc()) {
     $signatory_departments[] = $dept_row['name'];
 }
+
+// Fetch user accounts to allow routing to a specific user/account
+$available_accounts = [];
+$users_map = [];
+$users_by_dept = [];
+$users_heads_by_dept = [];
+// Some installations have no is_active column; select all users ordered by name instead.
+$users_res = $conn->query("SELECT user_id, username, full_name, role, is_head FROM users ORDER BY full_name ASC");
+if ($users_res) {
+    while ($user_row = $users_res->fetch_assoc()) {
+        $available_accounts[] = $user_row;
+        // map for client-side display
+        $users_map[$user_row['user_id']] = $user_row['full_name'] . ' (' . $user_row['username'] . ')';
+        $role = $user_row['role'] ?? '';
+        if (!isset($users_by_dept[$role])) { $users_by_dept[$role] = []; }
+        $users_by_dept[$role][] = $user_row;
+        if (!empty($user_row['is_head'])) {
+            if (!isset($users_heads_by_dept[$role])) { $users_heads_by_dept[$role] = []; }
+            $users_heads_by_dept[$role][] = $user_row;
+        }
+    }
+}
+// session user's role (used when 'Department Head' is selected)
+$session_requestor_role = $_SESSION['role'] ?? '';
 
 // Fetch document types for the dropdown
 $document_types = [];
@@ -184,9 +213,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if ($workflow_type === 'Transfer') {
         $status = 'In Transit';
-        $destination = $_POST['transfer_destination'] ?? null;
+        // Support selecting either an office destination or a specific account (user)
+        $destination_office = $_POST['transfer_destination'] ?? null;
+        $destination_account = $_POST['transfer_destination_account'] ?? null;
+        $destination = null;
+        if (!empty($destination_account)) {
+            $destination = $destination_account; // e.g., ACCOUNT:123
+        } else if (!empty($destination_office)) {
+            $destination = $destination_office;
+        }
+
         if (empty($destination)) {
-            $db_error = "A destination office must be selected for a Simple Transfer.";
+            $db_error = "A destination office or account must be selected for a Simple Transfer.";
         } else {
             $custom_workflow_arr = [$destination];
             $custom_workflow_json = json_encode($custom_workflow_arr);
@@ -234,27 +272,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if (isset($custom_workflow_arr[$next_stage_index_0_based])) {
                     $next_dept = $custom_workflow_arr[$next_stage_index_0_based];
                     
-                    $users_to_notify_stmt = null;
-
-                    if ($next_dept === 'Department Head') {
-                        // Notify only the head of the requestor's department
-                        $users_to_notify_stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ? AND is_head = 1");
-                        $users_to_notify_stmt->bind_param("s", $requestor_role);
-                    } else {
-                        // Use the global helper function to get the correct notification statement.
-                        $users_to_notify_stmt = prepare_notification_statement_for_department($conn, $next_dept);
-                    }
-
-                    if ($users_to_notify_stmt) {
-                        $users_to_notify_stmt->execute();
-                        $users_res = $users_to_notify_stmt->get_result();
-                        $signatory_notif_message = "Heads up! A new document (" . $voucher_id . ") from " . $_SESSION['full_name'] . " is en route to your office.";
+                    // Special handling: allow routing to a specific user account using the prefix 'ACCOUNT:<user_id>'
+                    if (is_string($next_dept) && strpos($next_dept, 'ACCOUNT:') === 0) {
+                        $account_user_id = intval(substr($next_dept, strlen('ACCOUNT:')));
+                        // Notify that specific user directly
+                        $signatory_notif_message = "Heads up! A new document (" . $voucher_id . ") from " . $_SESSION['full_name'] . " is en route to your account.";
                         $signatory_notif_link = "queue.php";
-                        while ($user_row = $users_res->fetch_assoc()) { create_notification($conn, $user_row['user_id'], $signatory_notif_message, $signatory_notif_link); }
-                        $users_to_notify_stmt->close();
+                        create_notification($conn, $account_user_id, $signatory_notif_message, $signatory_notif_link);
+                    } else {
+                        $users_to_notify_stmt = null;
+
+                        if ($next_dept === 'Department Head') {
+                            // Notify only the head of the requestor's department
+                            $users_to_notify_stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ? AND is_head = 1");
+                            $users_to_notify_stmt->bind_param("s", $requestor_role);
+                        } else {
+                            // Use the global helper function to get the correct notification statement.
+                            $users_to_notify_stmt = prepare_notification_statement_for_department($conn, $next_dept);
+                        }
+
+                        if ($users_to_notify_stmt) {
+                            $users_to_notify_stmt->execute();
+                            $users_res = $users_to_notify_stmt->get_result();
+                            $signatory_notif_message = "Heads up! A new document (" . $voucher_id . ") from " . $_SESSION['full_name'] . " is en route to your office.";
+                            $signatory_notif_link = "queue.php";
+                            while ($user_row = $users_res->fetch_assoc()) { create_notification($conn, $user_row['user_id'], $signatory_notif_message, $signatory_notif_link); }
+                            $users_to_notify_stmt->close();
+                        }
                     }
                 }
             }
+        
 
             // Generate a full, mobile-accessible URL for the QR code.
             if (defined('BASE_URL')) {
@@ -477,18 +525,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <option value="<?php echo htmlspecialchars($dept . ' (Head)'); ?>"><?php echo htmlspecialchars($dept . ' (Head)'); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <button type="button" onclick="addOffice()" style="padding: 0 15px; background: var(--naap-gold); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">+ Add</button>
+                            <button type="button" onclick="addOffice()" style="padding: 0 15px; background: var(--naap-gold); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">+ Add Office</button>
+
+                            <!-- Account routing: choose a specific user account to route to -->
+                            <select id="accountSelect" style="flex: 1; padding: 10px; border: 1px solid var(--border-light); border-radius: 6px;" disabled>
+                                <option value="" disabled selected>-- Select Office First --</option>
+                            </select>
+                            <button type="button" onclick="addAccount()" style="padding: 0 15px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">+ Add Account</button>
                         </div>
                     </div>
                     <div id="transfer_workflow_section" style="display:none;">
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Select the single department this document will be sent to.</p>
-                        <select name="transfer_destination" style="width: 100%; padding: 10px; border: 1px solid var(--border-light); border-radius: 6px;">
-                            <option value="" disabled selected>-- Select a Destination --</option>
-                             <?php foreach($signatory_departments as $dept): ?>
-                                <option value="<?php echo htmlspecialchars($dept); ?>"><?php echo htmlspecialchars($dept); ?></option>
-                                <option value="<?php echo htmlspecialchars($dept . ' (Head)'); ?>"><?php echo htmlspecialchars($dept . ' (Head)'); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div style="display:flex; gap:10px;">
+                            <select name="transfer_destination" id="transfer_destination" style="flex:1; padding: 10px; border: 1px solid var(--border-light); border-radius: 6px;">
+                                <option value="" disabled selected>-- Select a Destination (Office) --</option>
+                                 <?php foreach($signatory_departments as $dept): ?>
+                                    <option value="<?php echo htmlspecialchars($dept); ?>"><?php echo htmlspecialchars($dept); ?></option>
+                                    <option value="<?php echo htmlspecialchars($dept . ' (Head)'); ?>"><?php echo htmlspecialchars($dept . ' (Head)'); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+
+                            <select name="transfer_destination_account" id="transfer_destination_account" style="flex:1; padding: 10px; border: 1px solid var(--border-light); border-radius: 6px;" disabled>
+                                <option value="" disabled selected>-- Select Office First --</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -516,14 +576,49 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php if ($workflow_type === 'Transfer'): ?>
                 <p style="font-weight: bold; margin: 0 0 5px 0; font-size: 0.8rem; border-bottom: 1px solid var(--border-light); padding-bottom: 5px;">DESTINATION:</p>
                 <ul style="list-style-type: none; padding: 0; margin: 0;">
-                    <li><span>&rarr;</span> <?php echo htmlspecialchars($custom_workflow_arr[0] ?? 'N/A'); ?></li>
+                    <?php
+                        $dest_display = 'N/A';
+                        if (!empty($custom_workflow_arr[0])) {
+                            $first = $custom_workflow_arr[0];
+                            if (is_string($first) && strpos($first, 'ACCOUNT:') === 0) {
+                                $uid = intval(substr($first, strlen('ACCOUNT:')));
+                                $u_stmt = $conn->prepare("SELECT full_name, username FROM users WHERE user_id = ? LIMIT 1");
+                                $u_stmt->bind_param("i", $uid);
+                                $u_stmt->execute();
+                                $u_res = $u_stmt->get_result();
+                                if ($u_row = $u_res->fetch_assoc()) { $dest_display = htmlspecialchars($u_row['full_name'] . ' (' . $u_row['username'] . ')'); }
+                                $u_stmt->close();
+                            } else {
+                                $dest_display = htmlspecialchars($first);
+                            }
+                        }
+                    ?>
+                    <li><span>&rarr;</span> <?php echo $dest_display; ?></li>
                 </ul>
             <?php else: ?>
                 <p style="font-weight: bold; margin: 0 0 5px 0; font-size: 0.8rem; border-bottom: 1px solid var(--border-light); padding-bottom: 5px;">ROUTING SEQUENCE:</p>
                 <ul style="list-style-type: none; padding: 0; margin: 0;">
                     <?php if (empty($custom_workflow_arr)): ?><li>Default Sequence</li><?php endif; ?>
                     <?php foreach ($custom_workflow_arr as $index => $office): ?>
-                        <li><span><?php echo $index + 1; ?>.</span> <?php echo htmlspecialchars($office); ?></li>
+                        <li><span><?php echo $index + 1; ?>.</span> 
+                        <?php
+                            if (is_string($office) && strpos($office, 'ACCOUNT:') === 0) {
+                                $uid = intval(substr($office, strlen('ACCOUNT:')));
+                                $stmt = $conn->prepare("SELECT full_name, username FROM users WHERE user_id = ? LIMIT 1");
+                                $stmt->bind_param("i", $uid);
+                                $stmt->execute();
+                                $res = $stmt->get_result();
+                                if ($row = $res->fetch_assoc()) {
+                                    echo htmlspecialchars($row['full_name'] . ' (' . $row['username'] . ')');
+                                } else {
+                                    echo htmlspecialchars($office);
+                                }
+                                $stmt->close();
+                            } else {
+                                echo htmlspecialchars($office);
+                            }
+                        ?>
+                        </li>
                     <?php endforeach; ?>
                 </ul>
             <?php endif; ?>
@@ -546,6 +641,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     const artaLevelsMap = <?php echo json_encode($arta_levels_map); ?>; // arta_level => processing_days
     const defaultFinancialDocTypeId = <?php echo json_encode($default_financial_doc_type_id); ?>;
     let currentRoute = [];
+    const usersMap = <?php echo json_encode($users_map); ?>; // user_id => "Full Name (username)"
+    const usersByDept = <?php echo json_encode($users_by_dept); ?>; // dept => [user rows]
+    const usersHeadsByDept = <?php echo json_encode($users_heads_by_dept); ?>; // dept => [user rows who are heads]
+    const sessionRequestorRole = <?php echo json_encode($session_requestor_role); ?>;
     const voucherTypesData = <?php echo json_encode($voucher_types_data); ?>; // voucher_type_id => {name, arta_level, requirements, default_workflow}
 
 
@@ -693,7 +792,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     function addOffice() {
         const select = document.getElementById("officeSelect");
         const office = select.value;
-        
+        if (!office) { alert('Please select an office to add.'); return; }
+
         // Prevent adjacent duplicates
         if (currentRoute.length > 0 && currentRoute[currentRoute.length - 1] === office) {
             alert("⚠️ This office is already the current step.");
@@ -702,6 +802,68 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         currentRoute.push(office);
         updateRouteUI();
+    }
+
+    function addAccount() {
+        const select = document.getElementById("accountSelect");
+        const val = select.value;
+        if (!val) { alert('Please select an account to add.'); return; }
+
+        // val is of form 'ACCOUNT:<user_id>'
+        // Prevent adjacent duplicates
+        if (currentRoute.length > 0 && currentRoute[currentRoute.length - 1] === val) {
+            alert("⚠️ This account is already the current step.");
+            return;
+        }
+        currentRoute.push(val);
+        updateRouteUI();
+    }
+
+    function populateAccountsForOffice(office, targetSelectId) {
+        const target = document.getElementById(targetSelectId);
+        target.innerHTML = '';
+        if (!office) {
+            target.disabled = true;
+            target.innerHTML = '<option value="" disabled selected>-- Select Office First --</option>';
+            return;
+        }
+
+        // Handle 'Dept (Head)' suffix
+        let wantHeadOnly = false;
+        let baseOffice = office;
+        if (office.endsWith(' (Head)')) {
+            wantHeadOnly = true;
+            baseOffice = office.replace(' (Head)', '');
+        }
+
+        // Handle special 'Department Head' (of Requestor)
+        if (office === 'Department Head') {
+            // Use sessionRequestorRole
+            baseOffice = sessionRequestorRole;
+            wantHeadOnly = true;
+        }
+
+        const users = wantHeadOnly ? (usersHeadsByDept[baseOffice] || []) : (usersByDept[baseOffice] || []);
+        if (!users || users.length === 0) {
+            target.disabled = true;
+            target.innerHTML = '<option value="" disabled selected>No accounts found for selected office</option>';
+            return;
+        }
+
+        target.disabled = false;
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        placeholder.textContent = '-- Select Account to Add --';
+        target.appendChild(placeholder);
+
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = 'ACCOUNT:' + u.user_id;
+            opt.textContent = u.full_name + ' (' + u.username + ')';
+            target.appendChild(opt);
+        });
     }
 
     function removeOffice(index) {
@@ -720,7 +882,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             list.innerHTML = `<li style='padding: 25px; color: var(--text-muted); text-align: center; font-style: italic; font-size: 0.9rem;'>${msg}</li>`;
         } else {
-            currentRoute.forEach((office, index) => {
+            currentRoute.forEach((entry, index) => {
                 const li = document.createElement("li");
                 li.style.padding = "10px 15px";
                 li.style.borderBottom = (index === currentRoute.length - 1) ? "none" : "1px solid var(--border-light)";
@@ -728,15 +890,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 li.style.justifyContent = "space-between";
                 li.style.alignItems = "center";
                 li.style.fontSize = "0.9rem";
-                
+
+                let displayText = entry;
+                if (typeof entry === 'string' && entry.startsWith('ACCOUNT:')) {
+                    const uid = entry.split(':')[1];
+                    displayText = 'Account: ' + (usersMap[uid] || ('User #' + uid));
+                }
+
                 li.innerHTML = `
-                    <span><strong style="color: var(--naap-navy); margin-right: 10px;">Step ${index + 1}</strong> ${office}</span>
+                    <span><strong style="color: var(--naap-navy); margin-right: 10px;">Step ${index + 1}</strong> ${displayText}</span>
                     ${isCustomMode ? `<button type="button" onclick="removeOffice(${index})" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 1.2rem; font-weight: bold; line-height: 1;">&times;</button>` : ''}
                 `;
                 list.appendChild(li);
             });
         }
-        
+
         document.getElementById("customWorkflowInput").value = JSON.stringify(currentRoute);
     }
 
@@ -754,15 +922,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             const workflowType = document.querySelector('input[name="workflow_type"]:checked').value;
             if (workflowType === 'Approval') {
                 if(currentRoute.length === 0) {
-                    alert("⚠️ Rule Violation: You must add at least one office to the routing sequence for a custom approval.");
+                    alert("⚠️ Rule Violation: You must add at least one office or account to the routing sequence for a custom approval.");
+                    return false;
+                }
+            } else if (workflowType === 'Transfer') {
+                const destOffice = document.querySelector('select[name="transfer_destination"]').value;
+                const destAccount = document.querySelector('select[name="transfer_destination_account"]').value;
+                if (!destOffice && !destAccount) {
+                    alert("⚠️ Rule Violation: You must select a destination office or account for a simple transfer.");
                     return false;
                 }
             }
-        } else if (docType === 'custom' && workflowType === 'Transfer') {
-            const destination = document.querySelector('select[name="transfer_destination"]').value;
-            if (!destination) {
-                alert("⚠️ Rule Violation: You must select a destination office for a simple transfer.");
-                return false;
+        } else {
+            // For non-custom document types, if Transfer is chosen (edge case), validate transfer selects too
+            const workflowType = document.querySelector('input[name="workflow_type"]:checked').value;
+            if (workflowType === 'Transfer') {
+                const destOffice = document.querySelector('select[name="transfer_destination"]').value;
+                const destAccount = document.querySelector('select[name="transfer_destination_account"]').value;
+                if (!destOffice && !destAccount) {
+                    alert("⚠️ Rule Violation: You must select a destination office or account for a simple transfer.");
+                    return false;
+                }
             }
         }
         return true;
@@ -848,6 +1028,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // If the financial checkbox is checked on page load (e.g., form error), run the toggle function
         if (document.getElementById('has_financial').checked) {
             toggleFinancial();
+        }
+
+        // Wire up office -> accounts linkage
+        const officeSelect = document.getElementById('officeSelect');
+        if (officeSelect) {
+            officeSelect.addEventListener('change', function() { populateAccountsForOffice(this.value, 'accountSelect'); });
+        }
+        const transferOffice = document.getElementById('transfer_destination');
+        if (transferOffice) {
+            transferOffice.addEventListener('change', function() { populateAccountsForOffice(this.value, 'transfer_destination_account'); });
         }
 
         // Listener is now on the select element directly via onchange attribute

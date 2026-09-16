@@ -115,6 +115,12 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
 .step.current.received .step-label { color: #10b981; font-weight: 800; }
 .step.current.received .step-status { color: #10b981; }
 
+/* Processed State (Currently Processing) */
+.step.current.processed .step-icon { border-color: #3b82f6; background-color: #3b82f6; border-style: solid; }
+.step.current.processed .step-icon::after { background: white; content: '⏱️'; font-size: 24px; animation: none; }
+.step.current.processed .step-label { color: #3b82f6; font-weight: 800; }
+.step.current.processed .step-status { color: #3b82f6; }
+
 .step.error .step-icon { border-color: #ef4444; background-color: #ef4444; }
 .step.error .step-icon::after { content: '⚠️'; animation: none; font-size: 24px; }
 .step.error .step-label { color: #ef4444; }

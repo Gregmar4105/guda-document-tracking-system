@@ -6,6 +6,32 @@ if (!isset($_SESSION['logged_in'])) { header("Location: login.php"); exit(); }
 // Include database connection
 require_once 'db_connect.php';
 
+/**
+ * Resolves a department/account string for display.
+ * If the input is "ACCOUNT:<id>", looks up the user and returns "Full Name (Office)".
+ * Otherwise, returns the input as-is.
+ */
+function resolve_department_display($dept_str, $conn) {
+    if (!$dept_str || !is_string($dept_str)) return $dept_str;
+    
+    if (strpos($dept_str, 'ACCOUNT:') === 0) {
+        $user_id = intval(substr($dept_str, strlen('ACCOUNT:')));
+        if ($user_id > 0) {
+            $stmt = $conn->prepare("SELECT full_name, role FROM users WHERE user_id = ? LIMIT 1");
+            $stmt->bind_param("i", $user_id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $stmt->close();
+                return htmlspecialchars($row['full_name'] . ' (' . $row['role'] . ')');
+            }
+            $stmt->close();
+        }
+        return htmlspecialchars($dept_str); // Fallback if user not found
+    }
+    return htmlspecialchars($dept_str);
+}
+
 // ACCESS CONTROL: Only admins can access the general search page.
 // Other users can only access this page if a specific document ID is provided in the URL.
 $user_role = $_SESSION['role'] ?? 'Guest';
@@ -277,7 +303,9 @@ if (!empty($selected_id)) {
             $audit_stmt = $conn->prepare("SELECT * FROM audit_logs WHERE voucher_code = ? ORDER BY log_id ASC");
             
             $is_received = false;
+            $is_processing = false; // NEW: Track if document is being processed
             $current_stage_name = $stages[$v_data['Current_Stage_Index']]['name'] ?? '';
+            $last_action_in_current_stage = null; // NEW: Track last action
             
             if ($audit_stmt) {
                 $audit_stmt->bind_param("s", $selected_id);
@@ -296,7 +324,7 @@ if (!empty($selected_id)) {
                     $minutes = floor(($diff / 60) % 60);
                     
                     $v_data['Logs'][] = [
-                        "Dept" => $a_row['department'],
+                        "Dept" => resolve_department_display($a_row['department'], $conn),
                         "TimeIn" => format_db_timestamp($time_in),
                         "TimeOut" => format_db_timestamp($time_out),
                         "Action" => $a_row['action_taken'],
@@ -306,22 +334,41 @@ if (!empty($selected_id)) {
                     
                     $prev_time = $time_out;
 
-                    // Check if the current stage has officially received the physical document
-                    if ($a_row['action_taken'] === 'Scan-to-Receive' && $a_row['department'] === $current_stage_name) {
+                    // Check if ANY stage has officially received the physical document
+                    if ($a_row['action_taken'] === 'Scan-to-Receive') {
                         $is_received = true;
+                    }
+                    
+                    // NEW: Track if current stage has any action beyond just Scan-to-Receive
+                    if ($a_row['department'] === $current_stage_name) {
+                        $last_action_in_current_stage = $a_row['action_taken'];
                     }
                 }
                 $audit_stmt->close();
             }
+            
+            // NEW: Determine if document is actively being processed at current stage
+            // It's processing if: received AND has actions beyond just Scan-to-Receive
+            if ($is_received && $last_action_in_current_stage && $last_action_in_current_stage !== 'Scan-to-Receive') {
+                $is_processing = true;
+            }
 
             if (!in_array($v_data['Status'], ['Approved', 'Paid', 'Returned', 'Rejected', 'Ready for Release', 'Received'])) {
                 $current_stage_name = $stages[$v_data['Current_Stage_Index']]['name'] ?? 'Unknown';
+                // Resolve ACCOUNT: entries for display
+                $display_stage_name = $current_stage_name;
+                if (strpos($current_stage_name, 'ACCOUNT:') === 0) {
+                    $display_stage_name = resolve_department_display($current_stage_name, $conn);
+                } else {
+                    $display_stage_name = htmlspecialchars($current_stage_name);
+                }
+                
                 $diff = time() - strtotime($prev_time);
                 $hours = floor($diff / 3600);
                 $minutes = floor(($diff / 60) % 60);
 
                 $v_data['Logs'][] = [
-                    "Dept" => $current_stage_name,
+                    "Dept" => $display_stage_name,
                     "TimeIn" => format_db_timestamp($prev_time),
                     "TimeOut" => "Pending...",
                     "Action" => "Under Review",
@@ -554,7 +601,9 @@ if ($num_stages > 1) {
                             $step_class = 'completed';
                         } elseif ($index == $v_data['Current_Stage_Index']) {
                             $step_class = 'current';
-                            if (isset($is_received) && $is_received) {
+                            if (isset($is_processing) && $is_processing) {
+                                $step_class .= ' processed';
+                            } elseif (isset($is_received) && $is_received) {
                                 $step_class .= ' received';
                             }
                         }
@@ -562,12 +611,13 @@ if ($num_stages > 1) {
                         if (in_array($v_data['Status'], ['Returned', 'Rejected', 'Cancelled', 'Lapsed']) && $index == $v_data['Current_Stage_Index']) {
                             $step_class .= ' error';
                             $step_class = str_replace(' received', '', $step_class); // Clear received class on error
+                            $step_class = str_replace(' processed', '', $step_class); // Clear processed class on error
                         }
                     }
                 ?>
                     <div class="step <?php echo $step_class; ?>">
                         <div class="step-icon"><!-- Icon is now handled by CSS --></div>
-                        <div class="step-label"><?php echo $stage['name']; ?></div>
+                        <div class="step-label"><?php echo (strpos($stage['name'], 'ACCOUNT:') === 0) ? resolve_department_display($stage['name'], $conn) : htmlspecialchars($stage['name']); ?></div>
                         <?php 
                         // Show status text for the final completed step or any current/error step.
                         $is_last_completed_step = ($is_final_success_state && $index == $v_data['Current_Stage_Index']);
@@ -578,7 +628,9 @@ if ($num_stages > 1) {
                                 if ($v_data['Status'] == 'Returned') { echo '⚠️ ACTION REQUIRED'; }
                                 elseif (in_array($v_data['Status'], ['Rejected', 'Cancelled', 'Lapsed'])) { echo '❌ TERMINATED'; }
                                 elseif ($is_final_success_state) { echo '✔️ COMPLETED'; }
-                                else { echo (isset($is_received) && $is_received) ? '● RECEIVED' : '● IN TRANSIT'; }
+                                elseif (isset($is_processing) && $is_processing) { echo '⏱️ PROCESSING'; }
+                                elseif (isset($is_received) && $is_received) { echo '● RECEIVED'; }
+                                else { echo '● IN TRANSIT'; }
                                 ?>
                             </div>
                         <?php endif; ?>

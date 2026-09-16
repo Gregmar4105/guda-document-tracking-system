@@ -167,11 +167,19 @@ if ($is_signatory) {
                     AND ? = 1 -- The current user must be a head
                     AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's base role must match the department name part
                 )
+
+                -- Case 4: Custom workflow step targets a specific ACCOUNT:<id> and should be visible to that user
+                OR (
+                    JSON_LENGTH(v.custom_workflow) > 0
+                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                    AND CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED) = ?
+                )
             )
 SQL;
     $en_route_stmt = $conn->prepare($en_route_sql);
     $like_param = $base_dept_role . '%';
-    $en_route_stmt->bind_param("sssiis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role);
+    // Bind parameters: department LIKE, base role (for direct match), base role (for requestor dept check), is_head (for Department Head), is_head (for specific Head match), base role (for Head name match), current user id (for ACCOUNT:<id> match)
+    $en_route_stmt->bind_param("sssiisi", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_user_id);
     $en_route_stmt->execute();
     $en_route_res = $en_route_stmt->get_result();
     while ($row = $en_route_res->fetch_assoc()) {
@@ -200,7 +208,7 @@ if ($my_role === 'Requestor') {
         $my_stage_index_for_queue = $found_index_for_queue + 1; // 1-based index
     }
 
-    if ($is_head && $my_role !== 'Management Information System Office') {
+    if ($is_head && $my_role !== 'MIS') {
         // --- DEPARTMENT HEAD LOGIC ---
         // Fetches breakdown for tooltip and calculates total.
         // This query is now more robust to handle all custom workflow routing cases.
@@ -233,6 +241,13 @@ if ($my_role === 'Requestor') {
 
                     -- Case 3: Fallback for default workflow (no JSON)
                     OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
+
+                    -- Case 4: Custom workflow step targets a specific ACCOUNT:<id> and should be visible to that user
+                    OR (
+                        JSON_LENGTH(v.custom_workflow) > 0
+                        AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                        AND CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED) = ?
+                    )
                 )
                 AND v.status IN ('Pending Review', 'Processing', 'In Transit')
                 AND NOT EXISTS (
@@ -246,7 +261,7 @@ if ($my_role === 'Requestor') {
 SQL;
         $like_param = $base_dept_role . '%';
         $pending_stmt = $conn->prepare($sql);
-        $pending_stmt->bind_param("sssiisis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $like_param);
+        $pending_stmt->bind_param("sssiisiis", $like_param, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $my_user_id, $like_param);
         $pending_stmt->execute();
         $pending_res = $pending_stmt->get_result();
         while ($row = $pending_res->fetch_assoc()) {
@@ -256,36 +271,20 @@ SQL;
         $pending_stmt->close();
     } else {
         // --- REGULAR USER OR MIS ADMIN LOGIC ---
-        // Fetches a count of documents in the user's departmental queue.
-        if ($my_role === 'Management Information System Office') {
-            if ($is_head) {
-                // MIS HEAD: Counts all documents scanned into the department.
-                $sql = <<<'SQL'
-                    SELECT COUNT(DISTINCT v.voucher_code) as pending
-                    FROM vouchers v
-                    INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
-                    WHERE v.status IN ('Pending Review', 'Processing', 'In Transit')
-                    AND NOT EXISTS (
-                        SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
-                    )
+        // Fetches count only for the logged-in user.
+        if ($my_role === 'MIS') {
+            $sql = <<<'SQL'
+                SELECT COUNT(DISTINCT v.voucher_code) as pending
+                FROM vouchers v
+                INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+                WHERE al.processed_by_user_id = ?
+                AND v.status IN ('Pending Review', 'Processing', 'In Transit')
+                AND NOT EXISTS (
+                    SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                )
 SQL;
-                $pending_stmt = $conn->prepare($sql);
-                $pending_stmt->bind_param("ss", $my_role, $my_role);
-            } else {
-                // MIS STAFF: Counts only documents they personally scanned.
-                $sql = <<<'SQL'
-                    SELECT COUNT(DISTINCT v.voucher_code) as pending
-                    FROM vouchers v
-                    INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
-                    WHERE al.processed_by_user_id = ?
-                    AND v.status IN ('Pending Review', 'Processing', 'In Transit')
-                    AND NOT EXISTS (
-                        SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department = ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
-                    )
-SQL;
-                $pending_stmt = $conn->prepare($sql);
-                $pending_stmt->bind_param("sis", $my_role, $my_user_id, $my_role);
-            }
+            $pending_stmt = $conn->prepare($sql);
+            $pending_stmt->bind_param("sis", $my_role, $my_user_id, $my_role);
         } else {
             // This query is now aligned with the robust logic from queue.php to correctly identify actionable items.
             $sql = <<<'SQL'
@@ -313,9 +312,16 @@ SQL;
                             AND ? = 1 -- The current user must be a head
                             AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
                         )
- 
+
                         -- Case 3: Fallback for default workflow (no JSON)
                         OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
+
+                        -- Case 4: Custom workflow step targets a specific ACCOUNT:<id> and should be visible to that user
+                        OR (
+                            JSON_LENGTH(v.custom_workflow) > 0
+                            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                            AND CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED) = ?
+                        )
                     )
                     AND v.status IN ('Pending Review', 'Processing', 'In Transit')
                     AND NOT EXISTS (
@@ -327,7 +333,7 @@ SQL;
 SQL;
             $pending_stmt = $conn->prepare($sql);
             // Note: The processed_by_user_id = ? was removed from the JOIN, so the corresponding parameter is removed.
-            $pending_stmt->bind_param("sssiisis", $my_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $my_role);
+            $pending_stmt->bind_param("sssiisiis", $my_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index_for_queue, $my_user_id, $my_role);
         }
         
         $pending_stmt->execute();
@@ -385,7 +391,7 @@ if ($is_signatory) {
     $sql_where_stage = " AND (
         -- Case 1: Custom workflow step matches user's department
         (JSON_LENGTH(v.custom_workflow) > 0 AND REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '–', '-'), '—', '-') = ?)
- 
+
         -- Case 2: Custom workflow step is 'Department Head' AND the user is the head of the requestor's department
         OR (
             JSON_LENGTH(v.custom_workflow) > 0 
@@ -393,7 +399,7 @@ if ($is_signatory) {
             AND REPLACE(REPLACE(u_req.role, '–', '-'), '—', '-') = ? -- The requestor's department is the same as the current user's department
             AND ? = 1 -- The current user is a head
         )
- 
+
         -- NEW Case 2.5: Custom workflow step is for a specific department head, e.g., \"Accounting (Head)\"
         OR (
             JSON_LENGTH(v.custom_workflow) > 0
@@ -401,9 +407,16 @@ if ($is_signatory) {
             AND ? = 1 -- The current user must be a head
             AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
         )
- 
+
         -- Case 3: Fallback for default workflow (no JSON)
         OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
+
+        -- Case 4: Custom workflow step targets a specific ACCOUNT:<id> and should be visible to that user
+        OR (
+            JSON_LENGTH(v.custom_workflow) > 0
+            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+            AND CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED) = ?
+        )
     )";
     $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department LIKE ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
 
@@ -418,7 +431,7 @@ if ($is_signatory) {
         $sql = $sql_base . $sql_where_stage . $sql_end;
         $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("sssssiisis", $like_param, $first_day_of_month, $last_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $like_param);
+        $deadline_stmt->bind_param("sssssiisiis", $like_param, $first_day_of_month, $last_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $my_user_id, $like_param);
     }
 } else {
     // Requestors see the deadlines for their own submitted documents.
@@ -439,6 +452,7 @@ $deadline_stmt->execute();
 $deadline_res = $deadline_stmt->get_result();
 $documents_for_calendar = $deadline_res->fetch_all(MYSQLI_ASSOC);
 $deadline_stmt->close();
+
 
 // Process documents to create a highlight map for the calendar
 $date_highlights = [];

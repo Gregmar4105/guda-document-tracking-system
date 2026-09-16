@@ -51,20 +51,19 @@ $total_stages = count($workflow_sequence);
 // 3. FETCH ALL VOUCHERS PENDING APPROVAL IN CURRENT DEPARTMENT
 $pending_vouchers = [];
 
-if ($dept_role === 'Management Information System Office') {
-    // MIS has special queue logic. The Head sees all documents scanned into the department,
-    // while staff only see documents they personally scanned. This is for administrative oversight.
-    $sql_base = <<<'SQL'
-        SELECT DISTINCT
+if ($dept_role === 'MIS') {
+    // MIS can see any document scanned into its queue, regardless of workflow stage, to allow for administrative override.
+    // Fetch ARTA info using COALESCE for either document_type or voucher_type
+    $sql = "
+        SELECT DISTINCT 
             v.voucher_code, v.purpose, v.current_stage_index, v.status, v.date_submitted, v.custom_workflow, v.document_title,
             COALESCE(vt.arta_level, dt.arta_level) AS effective_arta_level,
             al_arta.processing_days,
             COALESCE(vt.name, dt.name) as effective_doc_type_name,
             u.full_name as requestor_name,
-            u.role as origin_office,
-            al.log_id as audit_log_id
-        FROM vouchers v
-        %s -- JOIN clause will be inserted here
+            u.role as origin_office
+        FROM vouchers v 
+        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
@@ -72,39 +71,15 @@ if ($dept_role === 'Management Information System Office') {
         WHERE
             v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
             AND NOT EXISTS (
-                SELECT 1 FROM audit_logs al2
-                WHERE al2.voucher_code = v.voucher_code
+                SELECT 1 FROM audit_logs al2 
+                WHERE al2.voucher_code = v.voucher_code 
                 AND al2.department = ?
                 AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
             )
         ORDER BY al.log_id DESC
-SQL;
-
-    if ($is_head) {
-        // MIS HEAD: Sees all documents scanned into the department, regardless of who scanned them.
-        $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?";
-        $sql = sprintf($sql_base, $join_sql);
-        $pending_stmt = $conn->prepare($sql);
-        // The first ? is in the JOIN, the second is in the NOT EXISTS.
-    if (!$pending_stmt) {
-        $search_error = "Database Error: " . $conn->error;
-        $pending_vouchers = [];
-    } else {
-        $pending_stmt->bind_param("ss", $dept_role, $dept_role);
-    }
-    } else {
-    // MIS STAFF: Sees only documents they personally scanned.
-    $join_sql = "INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?";
-    $sql = sprintf($sql_base, $join_sql);
+    ";
     $pending_stmt = $conn->prepare($sql);
-    // The first two ? are in the JOIN, the third is in the NOT EXISTS.
-    if (!$pending_stmt) {
-        $search_error = "Database Error: " . $conn->error;
-        $pending_vouchers = [];
-    } else {
-        $pending_stmt->bind_param("sis", $dept_role, $user_id, $dept_role);
-    }
-    }
+    $pending_stmt->bind_param("sis", $dept_role, $user_id, $dept_role);
 } else {
     // Regular signatories must follow the workflow sequence.
     // Fetch ARTA info using COALESCE for either document_type or voucher_type (using Nowdoc to prevent PHP parse errors)
@@ -115,8 +90,7 @@ SQL;
             al_arta.processing_days,
             COALESCE(vt.name, dt.name) as effective_doc_type_name,
             u.full_name as requestor_name,
-            u.role as origin_office,
-            al.log_id as audit_log_id
+            u.role as origin_office
         FROM vouchers v
         INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
         LEFT JOIN users u ON v.requestor_id = u.user_id
@@ -144,7 +118,14 @@ SQL;
                     AND ? = REPLACE(REPLACE(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ' (Head)', 1), '–', '-'), '—', '-') -- The user's role must match the department name part
                 )
 
-                -- Case 3: Fallback for default workflow (no JSON)
+                -- NEW Case 3: Custom workflow step targets a specific ACCOUNT:<id> and should be visible to that user
+                OR (
+                    JSON_LENGTH(v.custom_workflow) > 0
+                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                    AND CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED) = ?
+                )
+
+                -- Case 4: Fallback for default workflow (no JSON)
                 OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
             )
             AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
@@ -157,26 +138,17 @@ SQL;
         ORDER BY al.log_id DESC
 SQL;
     $pending_stmt = $conn->prepare($sql);
-    if (!$pending_stmt) {
-        $search_error = "Database Error: " . $conn->error;
-        $pending_vouchers = [];
-    } else {
-        $pending_stmt->bind_param("sssiisis", $dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $dept_role);
-    }
+    // Bind params (added current user id for ACCOUNT:<id> matching): dept_role (for audit_logs join), base_dept_role x2, is_head x2, base_dept_role (for head-name match), my_user_id (for ACCOUNT:<id>), my_stage_index (fallback), dept_role (for NOT EXISTS check)
+    $pending_stmt->bind_param("sssiisiis", $dept_role, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $user_id, $my_stage_index, $dept_role);
 }
 
-if ($pending_stmt) {
-    $pending_stmt->execute();
-    $pending_res = $pending_stmt->get_result();
+$pending_stmt->execute();
+$pending_res = $pending_stmt->get_result();
 
-    while($row = $pending_res->fetch_assoc()) {
-        $pending_vouchers[] = $row;
-    }
-    $pending_stmt->close();
-} else {
-    // Prepared statement failed earlier; $search_error already set.
-    $pending_vouchers = [];
+while($row = $pending_res->fetch_assoc()) {
+    $pending_vouchers[] = $row;
 }
+$pending_stmt->close();
 
 // 4. HANDLE VOUCHER SELECTION FROM QUEUE
 if (isset($_GET['select_id']) && !empty($_GET['select_id'])) {
@@ -220,45 +192,41 @@ if (isset($_GET['select_id']) && !empty($_GET['select_id'])) {
         $d_amount = $voucher_found['amount'];
 
         // 1. Suggestion based on historical approval rate for this document type
-        $hist_stmt_sql_base = "SELECT status FROM vouchers WHERE %s AND status IN ('Approved', 'Paid', 'Ready for Release', 'Returned', 'Rejected')";
+        $hist_stmt_sql = "SELECT status FROM vouchers WHERE ";
         $hist_params = [];
         $hist_types = "";
-        $where_clause = "";
-
         if ($d_voucher_type_id) {
-            $where_clause = "voucher_type_id = ?";
+            $hist_stmt_sql .= "voucher_type_id = ?";
             $hist_params[] = $d_voucher_type_id;
             $hist_types .= "i";
         } elseif ($d_doc_type_id) {
-            $where_clause = "doc_type_id = ?";
+            $hist_stmt_sql .= "doc_type_id = ?";
             $hist_params[] = $d_doc_type_id;
             $hist_types .= "i";
         }
-
-        if (!empty($where_clause)) {
-            $hist_stmt_sql = sprintf($hist_stmt_sql_base, $where_clause);
-            $hist_stmt = $conn->prepare($hist_stmt_sql);
-            if ($hist_stmt) {
-                $hist_stmt->bind_param($hist_types, ...$hist_params);
-                $hist_stmt->execute();
-                $hist_res = $hist_stmt->get_result();
-                $total_historical = $hist_res->num_rows;
-                $approved_count = 0;
-                while ($row = $hist_res->fetch_assoc()) {
-                    if (!in_array($row['status'], ['Returned', 'Rejected'])) {
-                        $approved_count++;
-                    }
+        $hist_stmt_sql .= " AND status IN ('Approved', 'Paid', 'Ready for Release', 'Returned', 'Rejected')";
+        
+        $hist_stmt = $conn->prepare($hist_stmt_sql);
+        if ($hist_stmt && !empty($hist_params)) {
+            $hist_stmt->bind_param($hist_types, ...$hist_params);
+            $hist_stmt->execute();
+            $hist_res = $hist_stmt->get_result();
+            $total_historical = $hist_res->num_rows;
+            $approved_count = 0;
+            while ($row = $hist_res->fetch_assoc()) {
+                if (!in_array($row['status'], ['Returned', 'Rejected'])) {
+                    $approved_count++;
                 }
-                if ($total_historical > 0) { // Show suggestion even with one historical doc
-                    $approval_rate = round(($approved_count / $total_historical) * 100);
-                    $suggestion_text = "Historically, <strong>{$approval_rate}%</strong> of similar documents have been approved.";
-                    if ($total_historical < 5) {
-                        $suggestion_text .= " <small>(Note: Based on a small sample size of {$total_historical} documents.)</small>";
-                    }
-                    $dss_suggestions[] = $suggestion_text;
-                }
-                $hist_stmt->close();
             }
+            if ($total_historical > 0) { // Show suggestion even with one historical doc
+                $approval_rate = round(($approved_count / $total_historical) * 100);
+                $suggestion_text = "Historically, <strong>{$approval_rate}%</strong> of similar documents have been approved.";
+                if ($total_historical < 5) {
+                    $suggestion_text .= " <small>(Note: Based on a small sample size of {$total_historical} documents.)</small>";
+                }
+                $dss_suggestions[] = $suggestion_text;
+            }
+            $hist_stmt->close();
         }
 
         // 2. Anomaly: Amount check (for financial vouchers)
@@ -388,8 +356,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                 }
             }
             
+            $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow FROM vouchers WHERE voucher_code = ?");
+            // The previous line was redundant and overwritten. The correct statement is below.
             $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type FROM vouchers WHERE voucher_code = ? FOR UPDATE");
-            $verify_stmt->bind_param("s", $processed_id);
+            $verify_stmt->bind_param("s", $processed_id); // ADDED: Bind parameter for the voucher_code
             $verify_stmt->execute();
             $verify_res = $verify_stmt->get_result();
             $verify_row = $verify_res->fetch_assoc();
@@ -415,40 +385,54 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             $is_authorized_to_process = false;
             $current_user_is_head = ($_SESSION['is_head'] ?? 0) == 1;
 
-            // Normalize the expected department name from the workflow
-            $normalized_expected_dept = str_replace(['–', '—'], '-', (string)$expected_dept);
-
-            // Get the user's base role (without '(Head)') and normalize it
-            $user_base_role = $dept_role;
-            if ($current_user_is_head) {
-                $user_base_role = trim(preg_replace('/\s*\(Head\)$/i', '', $user_base_role));
-            }
-            $normalized_user_base_role = str_replace(['–', '—'], '-', (string)$user_base_role);
-
-            // Case 1: Route is for a specific head, e.g., "Accounting Office (Head)"
-            if (preg_match('/^(.*) \(Head\)$/', $normalized_expected_dept, $matches)) {
-                $dept_name_for_head_check = trim($matches[1]);
-                if ($normalized_user_base_role === $dept_name_for_head_check && $current_user_is_head) {
-                    $is_authorized_to_process = true;
-                }
-            // Case 2: Route is for the generic "Department Head"
-            } elseif ($normalized_expected_dept === 'Department Head') {
-                // Must be the head of the requestor's department.
-                // $requestor_id_for_notif is already available from a few lines above.
-                $req_dept_stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
-                $req_dept_stmt->bind_param("i", $requestor_id_for_notif);
-                $req_dept_stmt->execute();
-                $requestor_department = $req_dept_stmt->get_result()->fetch_assoc()['role'] ?? null;
-                $req_dept_stmt->close();
-
-                $normalized_requestor_dept = str_replace(['–', '—'], '-', (string)$requestor_department);
-
-                if ($requestor_department && $normalized_user_base_role === $normalized_requestor_dept && $current_user_is_head) {
-                    $is_authorized_to_process = true;
-                }
-            // Case 3: Standard department route
-            } elseif ($normalized_expected_dept === $normalized_user_base_role) {
+            // MIS has special privileges and can process any document
+            if ($dept_role === 'MIS') {
                 $is_authorized_to_process = true;
+            } else {
+                // For non-MIS users, perform detailed authorization checks
+
+                // Normalize the expected department name from the workflow
+                // IMPORTANT: Only normalize if $expected_dept is not NULL
+                $normalized_expected_dept = ($expected_dept !== null) ? str_replace(['–', '—'], '-', (string)$expected_dept) : '';
+
+                // Get the user's base role (without '(Head)') and normalize it
+                $user_base_role = $dept_role;
+                if ($current_user_is_head) {
+                    $user_base_role = trim(preg_replace('/\s*\(Head\)$/i', '', $user_base_role));
+                }
+                $normalized_user_base_role = str_replace(['–', '—'], '-', (string)$user_base_role);
+
+                // Case 1: Route is for a specific head, e.g., "Accounting Office (Head)"
+                if (preg_match('/^(.*) \(Head\)$/', $normalized_expected_dept, $matches)) {
+                    $dept_name_for_head_check = trim($matches[1]);
+                    if ($normalized_user_base_role === $dept_name_for_head_check && $current_user_is_head) {
+                        $is_authorized_to_process = true;
+                    }
+                // Case 2: Route is for the generic "Department Head"
+                } elseif ($normalized_expected_dept === 'Department Head') {
+                    // Must be the head of the requestor's department.
+                    // $requestor_id_for_notif is already available from a few lines above.
+                    $req_dept_stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
+                    $req_dept_stmt->bind_param("i", $requestor_id_for_notif);
+                    $req_dept_stmt->execute();
+                    $requestor_department = $req_dept_stmt->get_result()->fetch_assoc()['role'] ?? null;
+                    $req_dept_stmt->close();
+
+                    $normalized_requestor_dept = str_replace(['–', '—'], '-', (string)$requestor_department);
+
+                    if ($requestor_department && $normalized_user_base_role === $normalized_requestor_dept && $current_user_is_head) {
+                        $is_authorized_to_process = true;
+                    }
+                // Case 3: Standard department route
+                } elseif ($normalized_expected_dept === $normalized_user_base_role) {
+                    $is_authorized_to_process = true;
+                // Case 4: Route targets a specific ACCOUNT:<user_id>
+                } elseif (strpos($normalized_expected_dept, 'ACCOUNT:') === 0) {
+                    $routed_account_id = (int)substr($normalized_expected_dept, 8); // Extract user_id from "ACCOUNT:123"
+                    if ($routed_account_id === $user_id) {
+                        $is_authorized_to_process = true;
+                    }
+                }
             }
 
             if (!$verify_row || !$is_authorized_to_process) {

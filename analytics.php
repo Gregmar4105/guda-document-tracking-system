@@ -11,6 +11,23 @@ if (!isset($_SESSION['logged_in']) || !($is_mis || $is_hr_head)) {
 
 require_once 'db_connect.php';
 
+// --- Helper Function: Resolve ACCOUNT:X to User Name ---
+function resolve_routing_step($step, $conn) {
+    if (is_string($step) && strpos($step, 'ACCOUNT:') === 0) {
+        $uid = intval(substr($step, strlen('ACCOUNT:')));
+        $stmt = $conn->prepare("SELECT full_name FROM users WHERE user_id = ? LIMIT 1");
+        $stmt->bind_param("i", $uid);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $stmt->close();
+            return $row['full_name'];
+        }
+        $stmt->close();
+    }
+    return $step;
+}
+
 // --- 1. ARTA COMPLIANCE RATE ---
 $arta_stats = ['on_time' => 0, 'at_risk' => 0, 'overdue' => 0];
 
@@ -340,6 +357,7 @@ if ($is_hr_head) {
             $workflow = json_decode($doc['custom_workflow'], true);
             if (empty($workflow)) { $workflow = $default_workflow; }
             $current_dept = $workflow[$doc['current_stage_index'] - 1] ?? 'Unknown Stage';
+            $current_dept = resolve_routing_step($current_dept, $conn);
 
             // Calculate time in queue
             $time_in_queue = (new DateTime())->getTimestamp() - (new DateTime($doc['last_action_time']))->getTimestamp();
@@ -385,8 +403,12 @@ if ($workflow_res) {
     while ($row = $workflow_res->fetch_assoc()) {
         $workflow_arr = json_decode($row['effective_workflow'], true);
         if (is_array($workflow_arr) && !empty($workflow_arr)) {
+            // Resolve ACCOUNT:X references to user names
+            $resolved_workflow = array_map(function($step) use ($conn) {
+                return resolve_routing_step($step, $conn);
+            }, $workflow_arr);
             $top_workflows[] = [
-                'path' => implode(' &rarr; ', $workflow_arr), 
+                'path' => implode(' &rarr; ', $resolved_workflow), 
                 'count' => $row['workflow_count']
             ];
         }

@@ -11,7 +11,6 @@ SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET AUTOCOMMIT = 0;
 START TRANSACTION;
 SET time_zone = "+00:00";
-SET FOREIGN_KEY_CHECKS = 0;
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -29,7 +28,6 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- Table structure for table `arta_levels`
 --
 
-DROP TABLE IF EXISTS `arta_levels`;
 CREATE TABLE `arta_levels` (
   `id` int(11) NOT NULL,
   `level_name` varchar(50) NOT NULL,
@@ -51,7 +49,6 @@ INSERT INTO `arta_levels` (`id`, `level_name`, `processing_days`) VALUES
 -- Table structure for table `audit_logs`
 --
 
-DROP TABLE IF EXISTS `audit_logs`;
 CREATE TABLE `audit_logs` (
   `log_id` int(11) NOT NULL,
   `voucher_code` varchar(50) DEFAULT NULL,
@@ -90,7 +87,6 @@ INSERT INTO `audit_logs` (`log_id`, `voucher_code`, `department`, `action_taken`
 -- Table structure for table `audit_logs_archive`
 --
 
-DROP TABLE IF EXISTS `audit_logs_archive`;
 CREATE TABLE `audit_logs_archive` (
   `log_id` int(11) NOT NULL,
   `voucher_code` varchar(50) DEFAULT NULL,
@@ -107,7 +103,6 @@ CREATE TABLE `audit_logs_archive` (
 -- Table structure for table `departments`
 --
 
-DROP TABLE IF EXISTS `departments`;
 CREATE TABLE `departments` (
   `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
@@ -160,7 +155,6 @@ INSERT INTO `departments` (`id`, `name`, `is_signatory`, `is_active`) VALUES
 -- Table structure for table `document_types`
 --
 
-DROP TABLE IF EXISTS `document_types`;
 CREATE TABLE `document_types` (
   `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
@@ -168,13 +162,8 @@ CREATE TABLE `document_types` (
   `arta_level` varchar(50) NOT NULL DEFAULT 'Simple',
   `workflow_type` varchar(50) NOT NULL DEFAULT 'Approval',
   `final_status_text` varchar(100) DEFAULT NULL,
-  `requirements` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `default_workflow` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `created_by_user_id` int(11) DEFAULT NULL,
-  `description` text DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `is_system_default` tinyint(1) NOT NULL DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `requirements` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+) ;
 
 --
 -- Dumping data for table `document_types`
@@ -198,7 +187,6 @@ INSERT INTO `document_types` (`id`, `name`, `category`, `arta_level`, `workflow_
 -- Table structure for table `holidays`
 --
 
-DROP TABLE IF EXISTS `holidays`;
 CREATE TABLE `holidays` (
   `id` int(11) NOT NULL,
   `holiday_date` date NOT NULL,
@@ -211,7 +199,6 @@ CREATE TABLE `holidays` (
 -- Table structure for table `job_titles`
 --
 
-DROP TABLE IF EXISTS `job_titles`;
 CREATE TABLE `job_titles` (
   `id` int(11) NOT NULL,
   `department_name` varchar(100) NOT NULL,
@@ -323,7 +310,6 @@ INSERT INTO `job_titles` (`id`, `department_name`, `title_name`) VALUES
 -- Table structure for table `migrations`
 --
 
-DROP TABLE IF EXISTS `migrations`;
 CREATE TABLE `migrations` (
   `id` int(11) NOT NULL,
   `migration_name` varchar(255) NOT NULL,
@@ -372,7 +358,6 @@ INSERT INTO `migrations` (`id`, `migration_name`, `applied_at`) VALUES
 -- Table structure for table `notifications`
 --
 
-DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
   `id` int(11) NOT NULL,
   `user_id` int(11) DEFAULT NULL,
@@ -416,18 +401,14 @@ INSERT INTO `notifications` (`id`, `user_id`, `voucher_code`, `message`, `link`,
 -- Table structure for table `pending_document_types`
 --
 
-DROP TABLE IF EXISTS `pending_document_types`;
 CREATE TABLE `pending_document_types` (
   `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `arta_level` varchar(50) NOT NULL DEFAULT 'Simple',
   `workflow_type` varchar(50) NOT NULL DEFAULT 'Approval',
   `final_status_text` varchar(100) DEFAULT NULL,
-  `default_workflow` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `created_by_user_id` int(11) DEFAULT NULL,
-  `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `status` varchar(50) NOT NULL DEFAULT 'pending'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `default_workflow` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+) ;
 
 --
 -- Dumping data for table `pending_document_types`
@@ -442,7 +423,6 @@ INSERT INTO `pending_document_types` (`id`, `name`, `arta_level`, `workflow_type
 -- Table structure for table `system_settings`
 --
 
-DROP TABLE IF EXISTS `system_settings`;
 CREATE TABLE `system_settings` (
   `setting_key` varchar(50) NOT NULL,
   `setting_value` text DEFAULT NULL
@@ -471,7 +451,6 @@ INSERT INTO `system_settings` (`setting_key`, `setting_value`) VALUES
 -- Table structure for table `users`
 --
 
-DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `user_id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
@@ -510,7 +489,6 @@ INSERT INTO `users` (`user_id`, `username`, `password_hash`, `role`, `full_name`
 -- Table structure for table `validation_rules`
 --
 
-DROP TABLE IF EXISTS `validation_rules`;
 CREATE TABLE `validation_rules` (
   `rule_id` int(11) NOT NULL,
   `document_type` varchar(100) DEFAULT NULL,
@@ -523,7 +501,6 @@ CREATE TABLE `validation_rules` (
 -- Table structure for table `vouchers`
 --
 
-DROP TABLE IF EXISTS `vouchers`;
 CREATE TABLE `vouchers` (
   `voucher_code` varchar(50) NOT NULL,
   `requestor_id` int(11) DEFAULT NULL,
@@ -563,7 +540,6 @@ INSERT INTO `vouchers` (`voucher_code`, `requestor_id`, `document_title`, `doc_t
 -- Table structure for table `vouchers_archive`
 --
 
-DROP TABLE IF EXISTS `vouchers_archive`;
 CREATE TABLE `vouchers_archive` (
   `voucher_code` varchar(50) NOT NULL,
   `requestor_id` int(11) DEFAULT NULL,
@@ -594,7 +570,6 @@ CREATE TABLE `vouchers_archive` (
 -- Table structure for table `voucher_documents`
 --
 
-DROP TABLE IF EXISTS `voucher_documents`;
 CREATE TABLE `voucher_documents` (
   `doc_id` int(11) NOT NULL,
   `voucher_code` varchar(50) DEFAULT NULL,
@@ -610,18 +585,13 @@ CREATE TABLE `voucher_documents` (
 -- Table structure for table `voucher_types`
 --
 
-DROP TABLE IF EXISTS `voucher_types`;
 CREATE TABLE `voucher_types` (
   `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `category` varchar(50) NOT NULL DEFAULT 'General',
   `arta_level` varchar(50) NOT NULL DEFAULT 'Complex',
-  `requirements` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `default_workflow` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `min_amount` decimal(15,2) DEFAULT NULL,
-  `max_amount` decimal(15,2) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `requirements` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+) ;
 
 --
 -- Dumping data for table `voucher_types`
@@ -675,12 +645,6 @@ ALTER TABLE `departments`
   ADD UNIQUE KEY `name_2` (`name`);
 
 --
--- Indexes for table `document_types`
---
-ALTER TABLE `document_types`
-  ADD PRIMARY KEY (`id`);
-
---
 -- Indexes for table `holidays`
 --
 ALTER TABLE `holidays`
@@ -706,12 +670,6 @@ ALTER TABLE `migrations`
 ALTER TABLE `notifications`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`);
-
---
--- Indexes for table `pending_document_types`
---
-ALTER TABLE `pending_document_types`
-  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `system_settings`
@@ -755,12 +713,6 @@ ALTER TABLE `voucher_documents`
   ADD KEY `verified_by` (`verified_by`);
 
 --
--- Indexes for table `voucher_types`
---
-ALTER TABLE `voucher_types`
-  ADD PRIMARY KEY (`id`);
-
---
 -- AUTO_INCREMENT for dumped tables
 --
 
@@ -792,7 +744,7 @@ ALTER TABLE `departments`
 -- AUTO_INCREMENT for table `document_types`
 --
 ALTER TABLE `document_types`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=50;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `holidays`
@@ -822,7 +774,7 @@ ALTER TABLE `notifications`
 -- AUTO_INCREMENT for table `pending_document_types`
 --
 ALTER TABLE `pending_document_types`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -846,7 +798,7 @@ ALTER TABLE `voucher_documents`
 -- AUTO_INCREMENT for table `voucher_types`
 --
 ALTER TABLE `voucher_types`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
@@ -877,7 +829,6 @@ ALTER TABLE `vouchers`
 ALTER TABLE `voucher_documents`
   ADD CONSTRAINT `voucher_documents_ibfk_1` FOREIGN KEY (`voucher_code`) REFERENCES `vouchers` (`voucher_code`) ON DELETE CASCADE,
   ADD CONSTRAINT `voucher_documents_ibfk_2` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL;
-SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -6,35 +6,14 @@
 echo "<h1>NAAP Document System - Database Migrations</h1>";
 
 // 1. DATABASE CONNECTION
-$host = "larable-mysql-service-larablenetwork-2db5.f.aivencloud.com";
-$db_user = "guda_database";
-$db_pass = "password123";
-$db_name = "gudaDB";
-$port = 20707;
+$host = "sql203.infinityfree.com";
+$db_user = "if0_42343630";
+$db_pass = "AndrioGuda123";
+$db_name = "if0_42343630_dts";
 
-// Define the path to your Aiven CA certificate.
-$ssl_ca_path = __DIR__ . '/ca.pem';
-
-// Aiven cloud databases require an SSL connection.
-// We must initialize mysqli and use real_connect with the SSL flag.
-$conn = mysqli_init();
-if (!$conn) {
-    die("<p style='color: red;'>mysqli_init failed. The server's PHP environment may not support MySQLi.</p>");
-}
-// Set SSL certificate for a secure, verified connection.
-if (file_exists($ssl_ca_path)) {
-    mysqli_ssl_set($conn, NULL, NULL, $ssl_ca_path, NULL, NULL);
-}
-
-// Connect using SSL and verify the server's certificate against the provided CA.
-// This is the most secure method. If this fails in your hosting environment,
-// you may need to revert to MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT, but this is less secure.
-if (!mysqli_real_connect($conn, $host, $db_user, $db_pass, $db_name, $port, null, MYSQLI_CLIENT_SSL)) {
-    $error_message = mysqli_connect_error();
-    if (strpos($error_message, 'SSL') !== false && !file_exists($ssl_ca_path)) {
-        $error_message .= " <strong>ACTION REQUIRED:</strong> The Aiven CA certificate (ca.pem) was not found. Please download it from your Aiven project dashboard and place it in the project's root directory.";
-    }
-    die("<p style='color: red;'>Database Connection Failed: " . $error_message . "</p>");
+$conn = new mysqli($host, $db_user, $db_pass, $db_name);
+if ($conn->connect_error) {
+    die("<p style='color: red;'>Database Connection Failed: " . $conn->connect_error . "</p>");
 }
 
 echo "<p>Database connected successfully. Checking for migrations...</p>";
@@ -392,111 +371,6 @@ applyMigration('add_force_password_change_feature_20240716', [
     "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `password_reset_timestamp`"
 ], $conn);
 
-// Migration 26: Add category column for HR analytics
-$doc_col_exists = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'document_types' AND column_name = 'category'")->fetch_assoc()['c'];
-$vt_col_exists = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'voucher_types' AND column_name = 'category'")->fetch_assoc()['c'];
-
-if ($doc_col_exists && $vt_col_exists) {
-    // Both columns already exist; record migration as applied to avoid duplicate errors
-    $stmt = $conn->prepare("INSERT IGNORE INTO migrations (migration_name) VALUES (?)");
-    $name = 'add_category_to_doc_and_voucher_types_20240717';
-    $stmt->bind_param('s', $name);
-    $stmt->execute();
-    $stmt->close();
-    echo "<p style='color: gray;'>Migration 'add_category_to_doc_and_voucher_types_20240717' already applied (columns exist). Skipping.</p>";
-} else {
-    applyMigration('add_category_to_doc_and_voucher_types_20240717', [
-        "ALTER TABLE `document_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`",
-        "ALTER TABLE `voucher_types` ADD COLUMN `category` VARCHAR(100) NULL DEFAULT NULL AFTER `name`"
-    ], $conn);
-}
-
-// Migration 27: Ensure audit_logs.log_id and audit_logs_archive.log_id are PRIMARY KEY AUTO_INCREMENT
-$audit_col_extra = $conn->query("SELECT EXTRA FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = 'audit_logs' AND COLUMN_NAME = 'log_id'")->fetch_assoc()['EXTRA'] ?? '';
-$audit_has_ai = strpos($audit_col_extra, 'auto_increment') !== false;
-$audit_has_pk = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'audit_logs' AND index_name = 'PRIMARY'")->fetch_assoc()['c'];
-
-$archive_col_extra = $conn->query("SELECT EXTRA FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = 'audit_logs_archive' AND COLUMN_NAME = 'log_id'")->fetch_assoc()['EXTRA'] ?? '';
-$archive_has_ai = strpos($archive_col_extra, 'auto_increment') !== false;
-$archive_has_pk = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'audit_logs_archive' AND index_name = 'PRIMARY'")->fetch_assoc()['c'];
-
-if ($audit_has_ai && $audit_has_pk && $archive_has_ai && $archive_has_pk) {
-    $stmt = $conn->prepare("INSERT IGNORE INTO migrations (migration_name) VALUES (?)");
-    $name = 'fix_audit_logs_auto_increment_20240730';
-    $stmt->bind_param('s', $name);
-    $stmt->execute();
-    $stmt->close();
-    echo "<p style='color: gray;'>Migration 'fix_audit_logs_auto_increment_20240730' already applied (audit_logs already AUTO_INCREMENT PK). Skipping.</p>";
-} else {
-    // Attempt to alter both tables; wrap in applyMigration to get rollback on failure
-    $queries = [];
-    if (!($audit_has_ai)) {
-        $queries[] = "ALTER TABLE `audit_logs` MODIFY `log_id` INT NOT NULL AUTO_INCREMENT";
-    }
-    if (!($audit_has_pk)) {
-        $queries[] = "ALTER TABLE `audit_logs` ADD PRIMARY KEY (`log_id`)";
-    }
-    if (!($archive_has_ai)) {
-        $queries[] = "ALTER TABLE `audit_logs_archive` MODIFY `log_id` INT NOT NULL AUTO_INCREMENT";
-    }
-    if (!($archive_has_pk)) {
-        $queries[] = "ALTER TABLE `audit_logs_archive` ADD PRIMARY KEY (`log_id`)";
-    }
-    if (!empty($queries)) {
-        applyMigration('fix_audit_logs_auto_increment_20240730', $queries, $conn);
-    }
-}
-
-// Migration 27b: Ensure notifications.id is AUTO_INCREMENT
-$notif_col_extra = $conn->query("SELECT EXTRA FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = 'notifications' AND COLUMN_NAME = 'id'")->fetch_assoc()['EXTRA'] ?? '';
-$notif_has_ai = strpos($notif_col_extra, 'auto_increment') !== false;
-$notif_has_pk = (int)$conn->query("SELECT COUNT(*) as c FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'notifications' AND index_name = 'PRIMARY'")->fetch_assoc()['c'];
-
-if ($notif_has_ai && $notif_has_pk) {
-    $stmt = $conn->prepare("INSERT IGNORE INTO migrations (migration_name) VALUES (?)");
-    $name = 'fix_notifications_auto_increment_20240730';
-    $stmt->bind_param('s', $name);
-    $stmt->execute();
-    $stmt->close();
-    echo "<p style='color: gray;'>Migration 'fix_notifications_auto_increment_20240730' already applied (notifications already AUTO_INCREMENT PK). Skipping.</p>";
-} else {
-    $queries = [];
-    if (!($notif_has_ai)) {
-        // Fix zero id if present
-        $zero_exists = (int)$conn->query("SELECT COUNT(*) as c FROM notifications WHERE id = 0")->fetch_assoc()['c'];
-        if ($zero_exists > 0) {
-            $next_id = (int)$conn->query("SELECT IFNULL(MAX(id), 0) + 1 as next FROM notifications")->fetch_assoc()['next'];
-            $conn->query("UPDATE notifications SET id = " . intval($next_id) . " WHERE id = 0");
-            echo "<p style='color: blue;'>Adjusted notifications.id = 0 row to id={$next_id} to allow AUTO_INCREMENT conversion.</p>";
-        }
-        $queries[] = "ALTER TABLE `notifications` MODIFY `id` INT NOT NULL AUTO_INCREMENT";
-    }
-    if (!($notif_has_pk)) {
-        $queries[] = "ALTER TABLE `notifications` ADD PRIMARY KEY (`id`)";
-    }
-    if (!empty($queries)) {
-        applyMigration('fix_notifications_auto_increment_20240730', $queries, $conn);
-    }
-}
-
-    // Migration 28: Ensure migrations.id is AUTO_INCREMENT
-    $mig_col_extra = $conn->query("SELECT EXTRA FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = 'migrations' AND COLUMN_NAME = 'id'")->fetch_assoc()['EXTRA'] ?? '';
-    $mig_has_ai = strpos($mig_col_extra, 'auto_increment') !== false;
-    if (!$mig_has_ai) {
-        // Fix any zero or invalid ids before converting to AUTO_INCREMENT
-        $zero_exists = (int)$conn->query("SELECT COUNT(*) as c FROM migrations WHERE id = 0")->fetch_assoc()['c'];
-        if ($zero_exists > 0) {
-            $next_id = (int)$conn->query("SELECT IFNULL(MAX(id), 0) + 1 as next FROM migrations")->fetch_assoc()['next'];
-            // Update the zero id row to the next available id
-            $conn->query("UPDATE migrations SET id = " . intval($next_id) . " WHERE id = 0");
-            echo "<p style='color: blue;'>Adjusted migrations.id = 0 row to id={$next_id} to allow AUTO_INCREMENT conversion.</p>";
-        }
-
-        applyMigration('fix_migrations_auto_increment_20240730', [
-            "ALTER TABLE `migrations` MODIFY `id` INT NOT NULL AUTO_INCREMENT"
-        ], $conn);
-    }
-
-    $conn->close();
-    echo "<p>Migration process complete.</p>";
-    ?>
+$conn->close();
+echo "<p>Migration process complete.</p>";
+?>

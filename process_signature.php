@@ -78,8 +78,14 @@ try {
     }
     $normalized_user_base_role = str_replace(['–', '—'], '-', (string)$user_base_role);
 
+    // Case 0: Route targets a specific account like "ACCOUNT:<user_id>"
+    if (preg_match('/^ACCOUNT:(\d+)$/i', $normalized_expected_dept, $acct_match)) {
+        $acct_target = intval($acct_match[1]);
+        if ($acct_target > 0 && $acct_target === (int)$user_id) {
+            $is_authorized_to_process = true;
+        }
     // Case 1: Route is for a specific head, e.g., "Accounting Office (Head)"
-    if (preg_match('/^(.*) \(Head\)$/', $normalized_expected_dept, $matches)) {
+    } elseif (preg_match('/^(.*) \(Head\)$/', $normalized_expected_dept, $matches)) {
         $dept_name_for_head_check = trim($matches[1]);
         if ($normalized_user_base_role === $dept_name_for_head_check && $current_user_is_head) {
             $is_authorized_to_process = true;
@@ -169,6 +175,70 @@ try {
         throw new Exception("Failed to record action in audit log.");
     }
     $log_stmt->close();
+
+    // --- NEW: Notify the next recipient if the workflow advanced to another step ---
+    try {
+        $next_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type FROM vouchers WHERE voucher_code = ? LIMIT 1");
+        $next_stmt->bind_param("s", $processed_id);
+        $next_stmt->execute();
+        $next_res = $next_stmt->get_result();
+        $next_row = $next_res->fetch_assoc();
+        $next_stmt->close();
+
+        if ($next_row) {
+            $next_current_index = (int)$next_row['current_stage_index'];
+            $next_custom_workflow = json_decode($next_row['custom_workflow'], true) ?? [];
+            $next_workflow_type = $next_row['workflow_type'] ?? 'Approval';
+
+            // Determine the workflow array to use
+            $effective_workflow = !empty($next_custom_workflow) ? $next_custom_workflow : $doc_workflow;
+
+            $next_stage_idx_0 = $next_current_index - 1; // 0-based
+            $next_step = $effective_workflow[$next_stage_idx_0] ?? null;
+
+            if (!empty($next_step)) {
+                // If the next step is an account (ACCOUNT:<id>), notify only that user
+                if (is_string($next_step) && strpos($next_step, 'ACCOUNT:') === 0) {
+                    $acct_id = intval(substr($next_step, strlen('ACCOUNT:')));
+                    if ($acct_id > 0) {
+                        $notif_message = "Heads up! A document (" . $processed_id . ") has been routed to your account.";
+                        $notif_link = "queue.php";
+                        create_notification($conn, $acct_id, $notif_message, $notif_link);
+                    }
+                } else {
+                    // Otherwise, notify according to department rules (heads or everyone)
+                    $users_to_notify_stmt = prepare_notification_statement_for_department($conn, $next_step);
+                    if ($users_to_notify_stmt) {
+                        $users_to_notify_stmt->execute();
+                        $users_res = $users_to_notify_stmt->get_result();
+                        $signatory_notif_message = "Heads up! A document (" . $processed_id . ") is en route to your office.";
+                        $signatory_notif_link = "queue.php";
+                        while ($user_row = $users_res->fetch_assoc()) {
+                            create_notification($conn, $user_row['user_id'], $signatory_notif_message, $signatory_notif_link);
+                        }
+                        $users_to_notify_stmt->close();
+                    }
+                }
+            } else {
+                // No next step (could be final); if this was a Transfer and its destination was an account, ensure it's notified
+                if ($next_workflow_type === 'Transfer') {
+                    // For Transfers, the destination is stored in custom_workflow[0]
+                    $dest = $next_custom_workflow[0] ?? ($doc_workflow[0] ?? null);
+                    if (is_string($dest) && strpos($dest, 'ACCOUNT:') === 0) {
+                        $acct_id = intval(substr($dest, strlen('ACCOUNT:')));
+                        if ($acct_id > 0) {
+                            $notif_message = "Heads up! A document (" . $processed_id . ") has been sent to your account.";
+                            $notif_link = "queue.php";
+                            create_notification($conn, $acct_id, $notif_message, $notif_link);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (Exception $e) {
+        // Non-fatal: log and continue (notification failures should not block the workflow)
+        error_log('Notification error in process_signature: ' . $e->getMessage());
+    }
 
     // If all good, commit
     $conn->commit();

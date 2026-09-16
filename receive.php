@@ -71,7 +71,7 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
 
         // WORKFLOW RULE: For non-admins, validate the sequence.
         // MIS is exempt from strict sequence validation. VPAA will now follow standard workflow rules.
-        if (empty($error_msg) && $dept_role !== 'Management Information System Office') {
+        if (empty($error_msg) && $dept_role !== 'MIS') {
             $current_stage_0_indexed = $v_stage - 1;
             $expected_dept_at_this_stage = $doc_workflow[$current_stage_0_indexed] ?? null;
             $is_head_route = (strpos($expected_dept_at_this_stage, '(Head)') !== false) || ($expected_dept_at_this_stage === 'Department Head');
@@ -116,6 +116,15 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
                 // NORMALIZE both strings to use a standard hyphen to be resilient against data inconsistency (e.g. – vs -)
                 $normalized_expected_dept = str_replace(['–', '—'], '-', (string)$expected_dept_at_this_stage);
                 $normalized_user_base_role = str_replace(['–', '—'], '-', (string)$user_base_role);
+
+                // Case: ACCOUNT:<id> - allow specific user to receive
+                if (is_string($expected_dept_at_this_stage) && stripos($expected_dept_at_this_stage, 'ACCOUNT:') === 0) {
+                    $acct_id = intval(substr($expected_dept_at_this_stage, strlen('ACCOUNT:')));
+                    if ($acct_id > 0 && $acct_id === (int)$user_id) {
+                        $is_authorized_to_receive = true;
+                    }
+                }
+
                 if ($normalized_expected_dept === $normalized_user_base_role) {
                     $is_authorized_to_receive = true;
                 }
@@ -132,6 +141,14 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
             $recv_stmt->bind_param("ssi", $receive_id, $dept_role, $user_id);
             if ($recv_stmt->execute()) {
                 $success_msg = "Voucher <strong>$receive_id</strong> from <strong>$requestor_name</strong> successfully received.<br><span style='font-size: 0.9rem;'>It is now pending in the Approval Queue.</span>";
+
+                // Ensure voucher is marked as 'Processing' so dashboards/ARTA include it
+                $update_v_stmt = $conn->prepare("UPDATE vouchers SET status = 'Processing' WHERE voucher_code = ?");
+                if ($update_v_stmt) {
+                    $update_v_stmt->bind_param("s", $receive_id);
+                    $update_v_stmt->execute();
+                    $update_v_stmt->close();
+                }
 
                 // Notify the requestor that their document has been physically received
                 if ($requestor_id) {

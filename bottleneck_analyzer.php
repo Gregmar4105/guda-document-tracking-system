@@ -239,11 +239,11 @@ class BottleneckAnalyzer {
             FROM audit_logs al
             LEFT JOIN vouchers v ON al.voucher_code = v.voucher_code
             WHERE al.department = ?
-            AND TIMESTAMPDIFF(HOUR, 
+            GROUP BY al.voucher_code, al.department
+            HAVING TIMESTAMPDIFF(HOUR,
                 MAX(CASE WHEN al.action_taken = 'Scan-to-Receive' THEN al.created_at END),
                 MAX(CASE WHEN al.action_taken = 'Accepted' THEN al.created_at END)
             ) > ?
-            GROUP BY al.voucher_code, al.department
             ORDER BY stay_hours DESC
             LIMIT ?
         ";

@@ -69,7 +69,7 @@ if ($dept_role === 'MIS') {
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
         LEFT JOIN arta_levels al_arta ON al_arta.level_name = COALESCE(vt.arta_level, dt.arta_level)
         WHERE
-            v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
+            v.status IN ('Pending Review', 'Processing', 'In Transit')
             AND NOT EXISTS (
                 SELECT 1 FROM audit_logs al2 
                 WHERE al2.voucher_code = v.voucher_code 
@@ -129,7 +129,7 @@ if ($dept_role === 'MIS') {
                 -- Case 4: Fallback for default workflow (no JSON)
                 OR ((v.custom_workflow IS NULL OR JSON_LENGTH(v.custom_workflow) = 0) AND v.current_stage_index = ?)
             )
-            AND v.status NOT IN ('Returned', 'Rejected', 'Paid', 'Ready for Release')
+            AND v.status IN ('Pending Review', 'Processing', 'In Transit')
             AND NOT EXISTS (
                 SELECT 1 FROM audit_logs al2 
                 WHERE al2.voucher_code = v.voucher_code 

@@ -64,6 +64,10 @@ $delayed_docs = [];
 $trend_data = [];
 $error_message = null;
 
+function format_analytics_number($value, $decimals = 1) {
+    return is_numeric($value) ? number_format((float) $value, $decimals) : 'N/A';
+}
+
 try {
     switch ($view) {
         case 'bottlenecks':
@@ -446,7 +450,7 @@ if ($can_view_all_analytics) {
                                 <div style="margin: 0.75rem 0;">
                                     <strong>Avg Processing Time:</strong> 
                                     <span class="risk-level-<?php echo $stat['avg_stay_hours'] > 24 ? 'high' : 'medium'; ?>">
-                                        <?php echo round($stat['avg_stay_hours'], 1); ?> hours
+                                        <?php echo format_analytics_number($stat['avg_stay_hours']); ?> hours
                                     </span>
                                 </div>
                                 <div style="margin: 0.5rem 0;">
@@ -481,9 +485,9 @@ if ($can_view_all_analytics) {
                                                 </span>
                                             </h4>
                                             <p style="margin: 0.5rem 0; font-size: 0.9rem;">
-                                                <strong>Average Processing Time:</strong> <?php echo round($bottleneck['avg_stay_hours'], 1); ?> hours<br>
+                                                <strong>Average Processing Time:</strong> <?php echo format_analytics_number($bottleneck['avg_stay_hours']); ?> hours<br>
                                                 <strong>Delayed Documents:</strong> <?php echo $bottleneck['delayed_documents']; ?> / <?php echo $bottleneck['total_documents']; ?> 
-                                                (<?php echo round($bottleneck['delay_percentage'], 1); ?>%)<br>
+                                                (<?php echo format_analytics_number($bottleneck['delay_percentage']); ?>%)<br>
                                                 <strong>Pending Documents:</strong> <?php echo $bottleneck['pending_documents']; ?>
                                             </p>
                                             <div class="recommendation">
@@ -526,7 +530,7 @@ if ($can_view_all_analytics) {
                                         <div>
                                             <strong style="color: #666;">Average Processing Time</strong><br>
                                             <span style="font-size: 1.5rem; color: #1565c0; font-weight: bold;">
-                                                <?php echo round($bottleneck['avg_stay_hours'], 1); ?> hours
+                                                <?php echo format_analytics_number($bottleneck['avg_stay_hours']); ?> hours
                                             </span>
                                         </div>
                                         <div>
@@ -535,7 +539,7 @@ if ($can_view_all_analytics) {
                                                 <?php echo $bottleneck['delayed_documents']; ?>/<?php echo $bottleneck['total_documents']; ?>
                                             </span>
                                             <span style="font-size: 0.85rem; color: #999;">
-                                                (<?php echo round($bottleneck['delay_percentage'], 1); ?>%)
+                                                (<?php echo format_analytics_number($bottleneck['delay_percentage']); ?>%)
                                             </span>
                                         </div>
                                         <div>
@@ -601,7 +605,7 @@ if ($can_view_all_analytics) {
                                                 <td><?php echo format_db_timestamp($doc['received_at'], 'M d, Y h:i A'); ?></td>
                                                 <td>
                                                     <span style="font-weight: bold; color: #d32f2f;">
-                                                        <?php echo round($doc['stay_hours'], 1); ?> hours
+                                                        <?php echo format_analytics_number($doc['stay_hours']); ?> hours
                                                     </span>
                                                 </td>
                                                 <td>

@@ -134,7 +134,16 @@ if ($throughput_res && $throughput_row = $throughput_res->fetch_assoc()) {
 
 // --- NEW: LAPSED DOCUMENT COUNT ---
 $lapsed_count = 0;
-$lapsed_res = $conn->query("SELECT COUNT(*) as count FROM vouchers WHERE status = 'Lapsed'");
+$lapsed_res = $conn->query("
+    SELECT COUNT(*) as count
+    FROM vouchers
+    WHERE status = 'Lapsed'
+       OR (
+            status IN ('Pending Review', 'Processing', 'In Transit')
+            AND arta_deadline IS NOT NULL
+            AND arta_deadline < CURDATE()
+       )
+");
 if ($lapsed_res && $lapsed_row = $lapsed_res->fetch_assoc()) {
     $lapsed_count = (int)$lapsed_row['count'];
 }

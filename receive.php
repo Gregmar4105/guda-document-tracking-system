@@ -52,6 +52,8 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
         // Get the document's specific workflow or fallback to the global one
         $doc_workflow = json_decode($voucher['custom_workflow'], true);
         if (empty($doc_workflow)) { $doc_workflow = $workflow_sequence; }
+        $current_stage_0_indexed = $v_stage - 1;
+        $expected_dept_at_this_stage = $doc_workflow[$current_stage_0_indexed] ?? null;
 
         // --- Refactored Validation Logic ---
 
@@ -59,12 +61,27 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
         if (in_array($voucher['status'], ['Returned', 'Rejected', 'Paid', 'Ready for Release'])) {
             $error_msg = "Cannot receive: Document is marked as '" . htmlspecialchars($voucher['status']) . "'.";
         } else {
-            // UNIVERSAL RULE 2: Cannot receive a document that's already in this department's queue.
-            $check_recv = $conn->prepare("SELECT log_id FROM audit_logs WHERE voucher_code = ? AND department = ? AND action_taken = 'Scan-to-Receive'");
-            $check_recv->bind_param("ss", $receive_id, $dept_role);
+            // A specific-account route is received per user, not per department.
+            $is_account_route = is_string($expected_dept_at_this_stage)
+                && stripos($expected_dept_at_this_stage, 'ACCOUNT:') === 0;
+            if ($is_account_route) {
+                $check_recv = $conn->prepare("
+                    SELECT log_id FROM audit_logs
+                    WHERE voucher_code = ? AND processed_by_user_id = ? AND action_taken = 'Scan-to-Receive'
+                ");
+                $check_recv->bind_param("si", $receive_id, $user_id);
+            } else {
+                $check_recv = $conn->prepare("
+                    SELECT log_id FROM audit_logs
+                    WHERE voucher_code = ? AND department = ? AND action_taken = 'Scan-to-Receive'
+                ");
+                $check_recv->bind_param("ss", $receive_id, $dept_role);
+            }
             $check_recv->execute();
             if ($check_recv->get_result()->num_rows > 0) {
-                $error_msg = "This voucher has already been scanned into your department's inbox.";
+                $error_msg = $is_account_route
+                    ? "This voucher has already been scanned into your account's inbox."
+                    : "This voucher has already been scanned into your department's inbox.";
             }
             $check_recv->close();
         }
@@ -72,8 +89,6 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
         // WORKFLOW RULE: For non-admins, validate the sequence.
         // MIS is exempt from strict sequence validation. VPAA will now follow standard workflow rules.
         if (empty($error_msg) && $dept_role !== 'MIS') {
-            $current_stage_0_indexed = $v_stage - 1;
-            $expected_dept_at_this_stage = $doc_workflow[$current_stage_0_indexed] ?? null;
             $is_head_route = (strpos($expected_dept_at_this_stage, '(Head)') !== false) || ($expected_dept_at_this_stage === 'Department Head');
             $current_user_is_head = ($_SESSION['is_head'] ?? 0) == 1;
 

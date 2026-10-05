@@ -304,7 +304,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
     $remarks = trim($_POST['remarks']);
 
         $document_rules_stmt = $conn->prepare("
-            SELECT v.workflow_type, COALESCE(vt.requirements, dt.requirements) AS effective_requirements
+            SELECT COALESCE(vt.requirements, dt.requirements) AS effective_requirements
             FROM vouchers v
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
@@ -315,7 +315,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
         $document_rules = $document_rules_stmt->get_result()->fetch_assoc();
         $document_rules_stmt->close();
 
-        $doc_workflow_type = is_array($document_rules) ? ($document_rules['workflow_type'] ?? 'Approval') : 'Approval';
         $all_reqs_array = [];
         if (is_array($document_rules) && !empty($document_rules['effective_requirements'])) {
             $decoded_requirements = json_decode($document_rules['effective_requirements'], true);
@@ -334,12 +333,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             $missing_requirements = array_diff($all_reqs_array, $checked_reqs_array);
             if (!empty($missing_requirements)) {
                 $search_error = "Validation Failed: All requirements must be checked before accepting the document.";
-            }
-
-            // When requirements exist, approval workflows require a department head.
-            // Documents without a checklist can be accepted by their authorized queue recipient.
-            if (!empty($all_reqs_array) && $doc_workflow_type === 'Approval' && $is_head != 1) {
-                $search_error = "Validation Failed: Only department heads are authorized to 'Accept' documents in an Approval workflow.";
             }
         }
         // --- END: REQUIREMENT CHECKLIST VALIDATION ---
@@ -786,7 +779,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!decisionForm) return;
 
     const workflowType = '<?php echo $voucher_found['workflow_type'] ?? 'Approval'; ?>';
-    const isHead = <?php echo $is_head; ?>;
     const remarksTextarea = document.getElementById('remarksTextarea');
     const acceptBtn = document.getElementById('acceptBtn');
     const returnBtn = document.getElementById('returnBtn');
@@ -807,30 +799,10 @@ document.addEventListener('DOMContentLoaded', function() {
             declineBtn.disabled = !hasRemarks;
         }
 
-        // Validate Accept button based on checklist requirements
-        // --- NEW: Combined validation for Accept button ---
-        let acceptIsDisabled = false;
-        let acceptTitle = '';
-
-        // Condition 1: Checklist requirements
-        if (totalRequirements > 0) {
-            const checkedRequirements = document.querySelectorAll('.requirements-checklist input[type="checkbox"]:checked').length;
-            acceptBtn.disabled = (checkedRequirements !== totalRequirements);
-            if (checkedRequirements !== totalRequirements) {
-                acceptIsDisabled = true;
-                acceptTitle = 'All requirements must be checked before accepting.';
-            }
-        }
-
-        // Keep head-only approval for checklist-based documents. Without requirements,
-        // any user authorized for this queue stage can accept the document.
-        if (totalRequirements > 0 && workflowType === 'Approval' && !isHead) {
-            acceptIsDisabled = true;
-            acceptTitle = 'Only department heads can accept approval-type documents.';
-        }
-
-        acceptBtn.disabled = acceptIsDisabled;
-        acceptBtn.title = acceptTitle;
+        const checkedRequirements = document.querySelectorAll('.requirements-checklist input[type="checkbox"]:checked').length;
+        const allRequirementsChecked = checkedRequirements === totalRequirements;
+        acceptBtn.disabled = !allRequirementsChecked;
+        acceptBtn.title = allRequirementsChecked ? '' : 'All requirements must be checked before accepting.';
     }
 
     // Add event listeners

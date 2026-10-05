@@ -154,28 +154,64 @@ $late_processing_summary = [];
 $late_processing_error = '';
 $late_processing_res = $conn->query("
     SELECT
+        al.log_id,
         al.voucher_code,
         al.department,
         al.processed_by_user_id,
         u.full_name,
-        MAX(al.created_at) AS processed_at,
-        MAX(DATEDIFF(DATE(al.created_at), v.arta_deadline)) AS days_late
+        al.action_taken,
+        al.created_at,
+        v.arta_deadline
     FROM audit_logs al
     INNER JOIN vouchers v ON v.voucher_code = al.voucher_code
     LEFT JOIN users u ON u.user_id = al.processed_by_user_id
-    WHERE al.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
-      AND al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    WHERE al.action_taken IN ('Scan-to-Receive', 'Accepted', 'RETURNED', 'DECLINED')
       AND v.arta_deadline IS NOT NULL
-      AND DATE(al.created_at) > v.arta_deadline
-    GROUP BY al.voucher_code, al.department, al.processed_by_user_id, u.full_name
+      AND EXISTS (
+          SELECT 1
+          FROM audit_logs late_action
+          WHERE late_action.voucher_code = v.voucher_code
+            AND late_action.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+            AND late_action.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            AND DATE(late_action.created_at) > v.arta_deadline
+      )
+    ORDER BY al.voucher_code, al.created_at, al.log_id
 ");
 
 if ($late_processing_res) {
+    $received_stages = [];
     while ($late_row = $late_processing_res->fetch_assoc()) {
+        $voucher_code = $late_row['voucher_code'];
         $office = trim((string)$late_row['department']) !== ''
             ? $late_row['department']
             : 'Unknown office';
-        $days_late = max(0, (int)$late_row['days_late']);
+
+        if ($late_row['action_taken'] === 'Scan-to-Receive') {
+            // Keep the earliest open receipt for this office stage. It determines
+            // whether the office had the document before its deadline passed.
+            if (!isset($received_stages[$voucher_code][$office])) {
+                $received_stages[$voucher_code][$office] = $late_row['created_at'];
+            }
+            continue;
+        }
+
+        if (!isset($received_stages[$voucher_code][$office])) {
+            continue;
+        }
+
+        $received_at = $received_stages[$voucher_code][$office];
+        unset($received_stages[$voucher_code][$office]);
+        $deadline = $late_row['arta_deadline'];
+        $received_date = substr($received_at, 0, 10);
+        $processed_date = substr($late_row['created_at'], 0, 10);
+
+        // Attribute lateness only to the office that held the document when
+        // the deadline expired, not later offices receiving it already overdue.
+        if ($received_date > $deadline || $processed_date <= $deadline) {
+            continue;
+        }
+
+        $days_late = max(0, (int)((strtotime($processed_date) - strtotime($deadline)) / 86400));
 
         $office_key = 'office:' . $office;
         if (!isset($late_processing_summary[$office_key])) {
@@ -669,7 +705,7 @@ if ($live_status_res) {
 
         <div class="page-header" style="margin-top: 60px;">
             <h1>Late Processing DSS</h1>
-            <p>Offices and accounts that processed documents after their ARTA deadline during the last 30 days.</p>
+            <p>Offices that held documents past their ARTA deadline, and the accounts that recorded the late decision, during the last 30 days.</p>
         </div>
         <div class="table-responsive">
             <?php if ($late_processing_error !== ''): ?>
@@ -677,7 +713,7 @@ if ($live_status_res) {
             <?php else: ?>
                 <p style="margin-top: 0; color: var(--text-muted);">
                     DSS trigger: <?php echo $late_processing_threshold; ?> or more distinct late documents in 30 days.
-                    A completion on the ARTA deadline date is considered on time.
+                    An office is counted only when it received the document on or before its deadline and processed it afterward. Later offices that received an already-overdue document are not attributed the delay. A decision on the deadline date is considered on time.
                 </p>
                 <table>
                     <thead>

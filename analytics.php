@@ -148,6 +148,86 @@ if ($lapsed_res && $lapsed_row = $lapsed_res->fetch_assoc()) {
     $lapsed_count = (int)$lapsed_row['count'];
 }
 
+// --- 30-DAY DSS: LATE PROCESSING BY OFFICE AND ACCOUNT ---
+$late_processing_threshold = 3;
+$late_processing_summary = [];
+$late_processing_error = '';
+$late_processing_res = $conn->query("
+    SELECT
+        al.voucher_code,
+        al.department,
+        al.processed_by_user_id,
+        u.full_name,
+        MAX(al.created_at) AS processed_at,
+        MAX(DATEDIFF(DATE(al.created_at), v.arta_deadline)) AS days_late
+    FROM audit_logs al
+    INNER JOIN vouchers v ON v.voucher_code = al.voucher_code
+    LEFT JOIN users u ON u.user_id = al.processed_by_user_id
+    WHERE al.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+      AND al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND v.arta_deadline IS NOT NULL
+      AND DATE(al.created_at) > v.arta_deadline
+    GROUP BY al.voucher_code, al.department, al.processed_by_user_id, u.full_name
+");
+
+if ($late_processing_res) {
+    while ($late_row = $late_processing_res->fetch_assoc()) {
+        $office = trim((string)$late_row['department']) !== ''
+            ? $late_row['department']
+            : 'Unknown office';
+        $days_late = max(0, (int)$late_row['days_late']);
+
+        $office_key = 'office:' . $office;
+        if (!isset($late_processing_summary[$office_key])) {
+            $late_processing_summary[$office_key] = [
+                'scope' => 'Office',
+                'name' => $office,
+                'late_documents' => [],
+                'days_late_total' => 0
+            ];
+        }
+        if (!isset($late_processing_summary[$office_key]['late_documents'][$late_row['voucher_code']])) {
+            $late_processing_summary[$office_key]['late_documents'][$late_row['voucher_code']] = $days_late;
+            $late_processing_summary[$office_key]['days_late_total'] += $days_late;
+        }
+
+        if (!empty($late_row['processed_by_user_id'])) {
+            $account_key = 'account:' . $late_row['processed_by_user_id'];
+            if (!isset($late_processing_summary[$account_key])) {
+                $account_name = $late_row['full_name'] ?: 'User #' . $late_row['processed_by_user_id'];
+                $late_processing_summary[$account_key] = [
+                    'scope' => 'Account',
+                    'name' => $account_name . ' — ' . $office,
+                    'late_documents' => [],
+                    'days_late_total' => 0
+                ];
+            }
+            if (!isset($late_processing_summary[$account_key]['late_documents'][$late_row['voucher_code']])) {
+                $late_processing_summary[$account_key]['late_documents'][$late_row['voucher_code']] = $days_late;
+                $late_processing_summary[$account_key]['days_late_total'] += $days_late;
+            }
+        }
+    }
+    $late_processing_res->close();
+
+    foreach ($late_processing_summary as &$late_summary) {
+        $late_summary['late_count'] = count($late_summary['late_documents']);
+        $late_summary['average_days_late'] = $late_summary['late_count'] > 0
+            ? $late_summary['days_late_total'] / $late_summary['late_count']
+            : 0;
+        unset($late_summary['late_documents'], $late_summary['days_late_total']);
+    }
+    unset($late_summary);
+
+    usort($late_processing_summary, function ($a, $b) {
+        return $b['late_count'] <=> $a['late_count']
+            ?: strcmp($a['scope'], $b['scope'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+} else {
+    $late_processing_error = $conn->error;
+    error_log('Late processing analytics query failed: ' . $late_processing_error);
+}
 
 // --- 4. AVERAGE "STAY TIME" PER DEPARTMENT ---
 $stay_times_per_dept = []; // department => [total_seconds, count]
@@ -585,6 +665,66 @@ if ($live_status_res) {
                 <p class="stat-label">Documents that exceeded their deadline.</p>
             </div>
 
+        </div>
+
+        <div class="page-header" style="margin-top: 60px;">
+            <h1>Late Processing DSS</h1>
+            <p>Offices and accounts that processed documents after their ARTA deadline during the last 30 days.</p>
+        </div>
+        <div class="table-responsive">
+            <?php if ($late_processing_error !== ''): ?>
+                <p class="alert-error">Late-processing analytics could not be loaded. Please check the application error log.</p>
+            <?php else: ?>
+                <p style="margin-top: 0; color: var(--text-muted);">
+                    DSS trigger: <?php echo $late_processing_threshold; ?> or more distinct late documents in 30 days.
+                    A completion on the ARTA deadline date is considered on time.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Level</th>
+                            <th>Office / Account</th>
+                            <th>Late Documents (30 Days)</th>
+                            <th>Average Days Late</th>
+                            <th>DSS Insight</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($late_processing_summary)): ?>
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-muted);">
+                                    No processing decisions were recorded after their ARTA deadlines in the last 30 days.
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($late_processing_summary as $late_summary): ?>
+                                <?php
+                                    $late_count = $late_summary['late_count'];
+                                    if ($late_count >= $late_processing_threshold && $late_summary['scope'] === 'Office') {
+                                        $dss_insight = 'Review queue age, workload distribution, and handoffs; consider prioritizing overdue work.';
+                                    } elseif ($late_count >= $late_processing_threshold) {
+                                        $dss_insight = 'Review current assignments and workload; consider support or follow-up for pending items.';
+                                    } else {
+                                        $dss_insight = 'Below the DSS alert threshold; continue monitoring.';
+                                    }
+                                ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($late_summary['scope']); ?></td>
+                                    <td><?php echo htmlspecialchars($late_summary['name']); ?></td>
+                                    <td>
+                                        <?php echo number_format($late_count); ?>
+                                        <?php if ($late_count >= $late_processing_threshold): ?>
+                                            <strong style="color: #b45309;"> DSS alert</strong>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo number_format($late_summary['average_days_late'], 1); ?></td>
+                                    <td><?php echo htmlspecialchars($dss_insight); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
         </div>
 
         <div class="page-header" style="margin-top: 60px;">

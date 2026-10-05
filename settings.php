@@ -359,27 +359,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         $stmt->close();
     }
-    // G. Handle System Settings Update
-    elseif (isset($_POST['update_system_settings'])) {
-        $setting_qr = isset($_POST['setting_qr']) ? '1' : '0';
-        $setting_rule = isset($_POST['setting_rule']) ? '1' : '0';
-        $setting_email = isset($_POST['setting_email']) ? '1' : '0';
-        $setting_audit = isset($_POST['setting_audit']) ? '1' : '0';
-
-        $conn->begin_transaction();
-        try {
-            $conn->query("INSERT INTO system_settings (setting_key, setting_value) VALUES ('setting_qr', '$setting_qr') ON DUPLICATE KEY UPDATE setting_value = '$setting_qr'");
-            $conn->query("INSERT INTO system_settings (setting_key, setting_value) VALUES ('setting_rule', '$setting_rule') ON DUPLICATE KEY UPDATE setting_value = '$setting_rule'");
-            $conn->query("INSERT INTO system_settings (setting_key, setting_value) VALUES ('setting_email', '$setting_email') ON DUPLICATE KEY UPDATE setting_value = '$setting_email'");
-            $conn->query("INSERT INTO system_settings (setting_key, setting_value) VALUES ('setting_audit', '$setting_audit') ON DUPLICATE KEY UPDATE setting_value = '$setting_audit'");
-            $conn->commit();
-            $success_msg = "System settings updated successfully.";
-        } catch (Exception $e) {
-            $conn->rollback();
-            $error_msg = "Error updating system settings: " . $e->getMessage();
-        }
-    }
-    // H. Handle General Financial Guidelines
+    // G. Handle General Financial Guidelines
     elseif (isset($_POST['update_financial_guidelines'])) {
         $min_amount = !empty($_POST['general_min_amount']) ? $_POST['general_min_amount'] : '';
         $max_amount = !empty($_POST['general_max_amount']) ? $_POST['general_max_amount'] : '';
@@ -1186,17 +1166,6 @@ foreach ($all_departments as $key => $dept) {
                                 <p style="text-align: center; color: var(--text-muted); padding: 15px; margin: 0;">No holidays added yet.</p>
                             <?php endif; ?>
                         </div>
-                    </div>
-                </div>
-                <div class="card"> <h3 class="card-title">General System Settings</h3>
-                    <div class="card-body">
-                        <form method="POST" class="general-settings-form">
-                            <div class="checkbox-group input-group"><input type="checkbox" id="setting_qr" name="setting_qr" value="1" <?php if($settings['setting_qr'] == '1') echo 'checked'; ?>><label for="setting_qr">Enable QR Code Scanning</label></div>
-                            <div class="checkbox-group input-group"><input type="checkbox" id="setting_rule" name="setting_rule" value="1" <?php if($settings['setting_rule'] == '1') echo 'checked'; ?>><label for="setting_rule">Enable Workflow Rule Validation</label></div>
-                            <div class="checkbox-group input-group"><input type="checkbox" id="setting_email" name="setting_email" value="1" <?php if($settings['setting_email'] == '1') echo 'checked'; ?>><label for="setting_email">Enable Email Notifications (Not yet implemented)</label></div>
-                            <div class="checkbox-group input-group"><input type="checkbox" id="setting_audit" name="setting_audit" value="1" <?php if($settings['setting_audit'] == '1') echo 'checked'; ?>><label for="setting_audit">Enable Detailed Audit Logging</label></div>
-                            <button type="submit" name="update_system_settings" class="btn btn-small" style="margin-top: 15px;">Save Settings</button>
-                        </form>
                     </div>
                 </div>
                 <div class="card"> <h3 class="card-title">ARTA Level Management</h3>

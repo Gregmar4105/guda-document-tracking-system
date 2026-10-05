@@ -93,7 +93,19 @@ if ($dept_role === 'MIS') {
             u.role as origin_office,
             al.log_id
         FROM vouchers v
-        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code
+            AND al.action_taken = 'Scan-to-Receive'
+            AND (
+                (
+                    JSON_LENGTH(v.custom_workflow) > 0
+                    AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                    AND al.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                )
+                OR (
+                    COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                    AND al.department = ?
+                )
+            )
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
@@ -133,8 +145,18 @@ if ($dept_role === 'MIS') {
             AND NOT EXISTS (
                 SELECT 1 FROM audit_logs al2 
                 WHERE al2.voucher_code = v.voucher_code 
-                AND al2.department = ?
                 AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                AND (
+                    (
+                        JSON_LENGTH(v.custom_workflow) > 0
+                        AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                        AND al2.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                    )
+                    OR (
+                        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                        AND al2.department = ?
+                    )
+                )
             )
         ORDER BY al.log_id DESC
 SQL;
@@ -481,8 +503,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                         if (isset($custom_workflow[$next_stage_index_0_based])) {
                             $next_dept = $custom_workflow[$next_stage_index_0_based];
                             $users_to_notify_stmt = null;
+                            $account_user_id = 0;
 
-                            if ($next_dept === 'Department Head') {
+                            if (is_string($next_dept) && strpos($next_dept, 'ACCOUNT:') === 0) {
+                                $account_user_id = (int)substr($next_dept, strlen('ACCOUNT:'));
+                                if ($account_user_id > 0) {
+                                    $notif_message = "Heads up! Document " . $processed_id . " has been processed by " . $dept_role . " and is now en route to your account.";
+                                    create_notification($conn, $account_user_id, $notif_message, "queue.php?select_id=" . urlencode($processed_id));
+                                }
+                            } elseif ($next_dept === 'Department Head') {
                                 // Get the requestor's department to find the correct head
                                 $req_dept_stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
                                 $req_dept_stmt->bind_param("i", $requestor_id_for_notif);

@@ -217,7 +217,7 @@ $stages = [["name" => "Requestor"]]; // Initialize with Requestor
 
 if (!empty($selected_id)) {
     $v_stmt = $conn->prepare("
-        SELECT v.*, vt.name as voucher_type_name, dt.arta_level, al.processing_days, u.full_name as requestor_full_name
+        SELECT v.*, vt.name as voucher_type_name, dt.arta_level, al.processing_days, u.full_name as requestor_full_name, u.role as requestor_role
         FROM vouchers v 
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
@@ -305,6 +305,16 @@ if (!empty($selected_id)) {
             $is_received = false;
             $is_processing = false; // NEW: Track if document is being processed
             $current_stage_name = $stages[$v_data['Current_Stage_Index']]['name'] ?? '';
+            $current_stage_account_id = 0;
+            $current_stage_department = $current_stage_name;
+            if (strpos($current_stage_name, 'ACCOUNT:') === 0) {
+                $current_stage_account_id = (int)substr($current_stage_name, strlen('ACCOUNT:'));
+            } elseif ($current_stage_name === 'Department Head') {
+                $current_stage_department = $row['requestor_role'] ?? '';
+            } else {
+                $current_stage_department = trim(preg_replace('/\s*\(Head\)$/i', '', $current_stage_name));
+            }
+            $current_stage_department = str_replace(['–', '—'], '-', $current_stage_department);
             $last_action_in_current_stage = null; // NEW: Track last action
             
             if ($audit_stmt) {
@@ -334,13 +344,16 @@ if (!empty($selected_id)) {
                     
                     $prev_time = $time_out;
 
-                    // Check if ANY stage has officially received the physical document
-                    if ($a_row['action_taken'] === 'Scan-to-Receive') {
+                    $audit_department = str_replace(['–', '—'], '-', (string)$a_row['department']);
+                    $matches_current_stage = $current_stage_account_id > 0
+                        ? (int)$a_row['processed_by_user_id'] === $current_stage_account_id
+                        : $audit_department === $current_stage_department;
+
+                    if ($matches_current_stage && $a_row['action_taken'] === 'Scan-to-Receive') {
                         $is_received = true;
                     }
-                    
-                    // NEW: Track if current stage has any action beyond just Scan-to-Receive
-                    if ($a_row['department'] === $current_stage_name) {
+
+                    if ($matches_current_stage) {
                         $last_action_in_current_stage = $a_row['action_taken'];
                     }
                 }
@@ -371,8 +384,10 @@ if (!empty($selected_id)) {
                     "Dept" => $display_stage_name,
                     "TimeIn" => format_db_timestamp($prev_time),
                     "TimeOut" => "Pending...",
-                    "Action" => "Under Review",
-                    "Remarks" => "Currently processing...",
+                    "Action" => $is_processing ? "Under Review" : ($is_received ? "Received" : "In Transit"),
+                    "Remarks" => $is_processing
+                        ? "Currently processing..."
+                        : ($is_received ? "Physical document received at station" : "Awaiting physical receipt at station."),
                     "StayTime" => "{$hours}h {$minutes}m (Running)"
                 ];
             }

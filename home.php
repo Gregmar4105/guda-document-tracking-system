@@ -140,11 +140,21 @@ if ($is_signatory) {
         LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
         WHERE
             v.status IN ('Pending Review', 'Processing', 'In Transit')
-            AND NOT EXISTS ( -- Exclude documents already received by the current user's DEPARTMENT
+            AND NOT EXISTS ( -- Exclude documents received by the current account or destination department
                 SELECT 1 FROM audit_logs al
                 WHERE al.voucher_code = v.voucher_code
                 AND al.action_taken = 'Scan-to-Receive'
-                AND al.department LIKE ?
+                AND (
+                    (
+                        JSON_LENGTH(v.custom_workflow) > 0
+                        AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                        AND al.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                    )
+                    OR (
+                        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                        AND al.department LIKE ?
+                    )
+                )
             )
             AND (
                 -- Case 1: Custom workflow step matches user's department
@@ -213,7 +223,19 @@ if ($my_role === 'Requestor') {
         $sql = <<<'SQL'
             SELECT u.full_name, COUNT(DISTINCT v.voucher_code) as user_pending_count
             FROM vouchers v
-            INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department LIKE ?
+            INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code
+                AND al.action_taken = 'Scan-to-Receive'
+                AND (
+                    (
+                        JSON_LENGTH(v.custom_workflow) > 0
+                        AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                        AND al.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                    )
+                    OR (
+                        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                        AND al.department LIKE ?
+                    )
+                )
             INNER JOIN users u ON al.processed_by_user_id = u.user_id
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE
@@ -251,8 +273,18 @@ if ($my_role === 'Requestor') {
                 AND NOT EXISTS (
                     SELECT 1 FROM audit_logs al2 
                     WHERE al2.voucher_code = v.voucher_code 
-                    AND al2.department LIKE ?
                     AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                    AND (
+                        (
+                            JSON_LENGTH(v.custom_workflow) > 0
+                            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                            AND al2.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                        )
+                        OR (
+                            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                            AND al2.department LIKE ?
+                        )
+                    )
                 )
             GROUP BY al.processed_by_user_id, u.full_name
             ORDER BY user_pending_count DESC
@@ -288,7 +320,19 @@ SQL;
             $sql = <<<'SQL'
                 SELECT COUNT(DISTINCT v.voucher_code) as pending
                 FROM vouchers v
-                INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ?
+                INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code
+                    AND al.action_taken = 'Scan-to-Receive'
+                    AND (
+                        (
+                            JSON_LENGTH(v.custom_workflow) > 0
+                            AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                            AND al.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                        )
+                        OR (
+                            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                            AND al.department = ?
+                        )
+                    )
                 LEFT JOIN users u ON v.requestor_id = u.user_id
                 WHERE
                     (
@@ -325,8 +369,18 @@ SQL;
                     AND NOT EXISTS (
                         SELECT 1 FROM audit_logs al2 
                         WHERE al2.voucher_code = v.voucher_code
-                        AND al2.department = ? 
-                        AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') 
+                        AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                        AND (
+                            (
+                                JSON_LENGTH(v.custom_workflow) > 0
+                                AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                                AND al2.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+                            )
+                            OR (
+                                COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                                AND al2.department = ?
+                            )
+                        )
                     )
 SQL;
             $pending_stmt = $conn->prepare($sql);
@@ -415,7 +469,22 @@ if ($is_signatory) {
             AND CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED) = ?
         )
     )";
-    $sql_end = " AND NOT EXISTS ( SELECT 1 FROM audit_logs al2 WHERE al2.voucher_code = v.voucher_code AND al2.department LIKE ? AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED') )";
+    $sql_end = " AND NOT EXISTS (
+        SELECT 1 FROM audit_logs al2
+        WHERE al2.voucher_code = v.voucher_code
+        AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+        AND (
+            (
+                JSON_LENGTH(v.custom_workflow) > 0
+                AND JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))) LIKE 'ACCOUNT:%'
+                AND al2.processed_by_user_id = CAST(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), ':', -1) AS UNSIGNED)
+            )
+            OR (
+                COALESCE(JSON_UNQUOTE(JSON_EXTRACT(v.custom_workflow, CONCAT('$[', v.current_stage_index - 1, ']'))), '') NOT LIKE 'ACCOUNT:%'
+                AND al2.department LIKE ?
+            )
+        )
+    )";
 
     // MIS has special privileges to see all documents in its queue, regardless of stage.
     if ($my_role === 'MIS') {

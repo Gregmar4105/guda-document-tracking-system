@@ -594,6 +594,18 @@ body {
 
 /* Enhanced Print CSS */
 @media print {
+    .main-content {
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 1100px !important;
+        padding: 0 !important;
+        display: flex;
+        justify-content: center;
+    }
+    .container, .print-specific-requirements-card, .print-header, .modal-overlay, .print-card {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
     * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;

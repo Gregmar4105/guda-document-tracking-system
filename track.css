@@ -200,6 +200,18 @@ body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-gray
 
 /* DYNAMIC PRINTING CSS */
 @media print {
+    .main-content {
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 1100px !important;
+        padding: 0 !important;
+        display: flex;
+        justify-content: center;
+    }
+    .container, .table-responsive, .tracker-container, .qr-print-card, .selection-card, .print-header {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
     * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;

@@ -216,6 +216,18 @@ textarea:focus { outline: none; border-color: var(--naap-navy); }
 }
 
 @media print {
+    .main-content {
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 1100px !important;
+        padding: 0 !important;
+        display: flex;
+        justify-content: center;
+    }
+    .container, .queue-container, .details-panel, .action-panel, .pending-card, .modal-overlay {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
     .sidebar { display: none !important; }
     .main-content { margin-left: 0 !important; width: 100% !important; }
     body { background: white !important; }

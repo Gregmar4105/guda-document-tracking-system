@@ -685,7 +685,7 @@ if ($live_status_res) {
             <p>Targeted insights for HR document processing across departments.</p>
         </div>
 
-        <div class="stats-grid">
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));">
             <!-- HR-Specific Average Stay Time per Department Card -->
             <div class="stat-card">
                 <div class="stat-card-header">
@@ -718,11 +718,11 @@ if ($live_status_res) {
 
         <!-- NEW LIVE MONITORING TABLE -->
         <div class="stats-grid" style="grid-template-columns: 1fr; margin-top: 30px;">
-            <div class="stat-card">
-                <div class="stat-card-header">
+            <div class="stat-card" style="padding: 0; overflow: hidden;">
+                <div class="stat-card-header" style="padding: 25px 25px 0; margin: 0; border-bottom: 1px solid var(--border-light);">
                     <h3>Live Document Performance Monitoring</h3>
                 </div>
-                <div class="table-responsive" style="margin-top: 20px;">
+                <div class="table-responsive" style="margin: 0; border: none; border-radius: 0; background: transparent;">
                     <table>
                         <thead>
                             <tr>

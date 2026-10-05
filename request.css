@@ -77,17 +77,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--n
 }
 
 @media print {
-    .main-content {
-        margin: 0 auto !important;
-        width: 100% !important;
-        max-width: 1100px !important;
-        padding: 0 !important;
-        display: flex;
-        justify-content: center;
+    body {
+        display: block !important;
+        margin: 0 !important;
     }
-    .container, .form-container, .modal-overlay, .print-card, .print-specific-requirements-card {
-        margin-left: auto !important;
-        margin-right: auto !important;
+    .main-content,
+    .sidebar {
+        display: none !important;
     }
     /* Hide everything on the page by default */
     body * {
@@ -97,13 +93,19 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--n
     .modal-overlay, .modal-overlay * {
         visibility: visible;
     }
-    /* Reset the overlay's styles so it doesn't affect the print layout */
+    /* Center the slip independently of the screen's sidebar and flex layout. */
     .modal-overlay {
-        position: static;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
         background: transparent;
-        display: block;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        padding: 0 !important;
     }
-    .print-card { position: static; box-shadow: none; max-height: none; overflow: visible; margin: 0 auto; border: 1px solid #eee; }
+    .print-card { position: static; box-shadow: none; max-height: none; overflow: visible; margin: 0; border: 1px solid #eee; }
     .print-checklist { max-height: none; overflow: visible; }
     .btn-print, .btn-close { display: none; }
 }

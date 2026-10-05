@@ -206,40 +206,49 @@ foreach ($spending_by_dept as $data) {
     <title>Financial Analytics - NAAP</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo @filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="analytics.css?v=<?php echo @filemtime('analytics.css'); ?>">
+    <style>
+        @media print {
+            @page {
+                size: landscape;
+                margin: 12mm;
+            }
+        }
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+<body class="accounting-analytics">
 
 <?php include 'sidebar.php'; ?>
 
 <div class="main-content">
-    <div class="print-only-summary">
-        <h3>Report Summary</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Total Requested</th>
-                    <th>Total Approved</th>
-                    <th>Total Returned</th>
-                    <th>Total Declined</th>
-                    <th>Avg. Processing Time</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><?php echo number_format($grand_totals['requested']); ?></td>
-                    <td><?php echo number_format($grand_totals['approved']); ?></td>
-                    <td><?php echo number_format($grand_totals['returned']); ?></td>
-                    <td><?php echo number_format($grand_totals['declined']); ?></td>
-                    <td><?php echo $avg_processing_time_formatted; ?></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
     <div class="container">
         <div class="page-header">
             <h1>Financial Analytics</h1>
             <p>A summary of document actions across all departments.</p>
+        </div>
+
+        <div class="print-only-summary">
+            <h3>Report Summary</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Total Requested</th>
+                        <th>Total Approved</th>
+                        <th>Total Returned</th>
+                        <th>Total Declined</th>
+                        <th>Avg. Processing Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><?php echo number_format($grand_totals['requested']); ?></td>
+                        <td><?php echo number_format($grand_totals['approved']); ?></td>
+                        <td><?php echo number_format($grand_totals['returned']); ?></td>
+                        <td><?php echo number_format($grand_totals['declined']); ?></td>
+                        <td><?php echo $avg_processing_time_formatted; ?></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <div class="button-group" style="text-align: right; margin-bottom: 20px;">

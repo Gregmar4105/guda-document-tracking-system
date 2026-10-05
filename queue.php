@@ -303,41 +303,51 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
     $processed_id = $_POST['voucher_id'];
     $remarks = trim($_POST['remarks']);
 
-        // --- START: REQUIREMENT CHECKLIST VALIDATION ---
-        if ($action === 'Accept') {
-            $all_reqs_array = isset($_POST['all_reqs']) ? json_decode($_POST['all_reqs'], true) : [];
-            $checked_reqs_array = $_POST['checked_reqs'] ?? [];
+        $document_rules_stmt = $conn->prepare("
+            SELECT v.workflow_type, COALESCE(vt.requirements, dt.requirements) AS effective_requirements
+            FROM vouchers v
+            LEFT JOIN document_types dt ON v.doc_type_id = dt.id
+            LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
+            WHERE v.voucher_code = ?
+        ");
+        $document_rules_stmt->bind_param("s", $processed_id);
+        $document_rules_stmt->execute();
+        $document_rules = $document_rules_stmt->get_result()->fetch_assoc();
+        $document_rules_stmt->close();
 
-            // This validation runs only if the document actually has requirements.
-            if (!empty($all_reqs_array) && count($checked_reqs_array) < count($all_reqs_array)) {
+        $doc_workflow_type = is_array($document_rules) ? ($document_rules['workflow_type'] ?? 'Approval') : 'Approval';
+        $all_reqs_array = [];
+        if (is_array($document_rules) && !empty($document_rules['effective_requirements'])) {
+            $decoded_requirements = json_decode($document_rules['effective_requirements'], true);
+            if (is_array($decoded_requirements)) {
+                $all_reqs_array = array_values(array_filter($decoded_requirements, 'is_string'));
+            }
+        }
+        $checked_reqs_array = $_POST['checked_reqs'] ?? [];
+        if (!is_array($checked_reqs_array)) {
+            $checked_reqs_array = [];
+        }
+        $checked_reqs_array = array_values(array_filter($checked_reqs_array, 'is_string'));
+
+        // --- REQUIREMENT CHECKLIST VALIDATION ---
+        if ($action === 'Accept') {
+            $missing_requirements = array_diff($all_reqs_array, $checked_reqs_array);
+            if (!empty($missing_requirements)) {
                 $search_error = "Validation Failed: All requirements must be checked before accepting the document.";
+            }
+
+            // When requirements exist, approval workflows require a department head.
+            // Documents without a checklist can be accepted by their authorized queue recipient.
+            if (!empty($all_reqs_array) && $doc_workflow_type === 'Approval' && $is_head != 1) {
+                $search_error = "Validation Failed: Only department heads are authorized to 'Accept' documents in an Approval workflow.";
             }
         }
         // --- END: REQUIREMENT CHECKLIST VALIDATION ---
 
-        // --- NEW: HEAD-ONLY APPROVAL VALIDATION ---
-        if ($action === 'Accept') {
-            // Fetch the workflow_type for the document being processed.
-            $w_type_stmt = $conn->prepare("SELECT workflow_type FROM vouchers WHERE voucher_code = ?");
-            $w_type_stmt->bind_param("s", $_POST['voucher_id']);
-            $w_type_stmt->execute();
-            $w_type_res = $w_type_stmt->get_result();
-            $doc_workflow_type = ($w_type_res->num_rows > 0) ? $w_type_res->fetch_assoc()['workflow_type'] : 'Approval';
-            $w_type_stmt->close();
-
-            // The current user's head status is already available in $is_head
-            if ($doc_workflow_type === 'Approval' && $is_head != 1) {
-                $search_error = "Validation Failed: Only department heads are authorized to 'Accept' documents in an Approval workflow.";
-            }
-        }
-        // --- END: HEAD-ONLY APPROVAL VALIDATION ---
-
         // Only proceed if there are no validation errors.
         if (empty($search_error)) {
             // --- NEW: Build detailed remarks from checklist for Return/Decline actions ---
-            if (in_array($action, ['Return', 'Decline']) && isset($_POST['all_reqs']) && !empty($_POST['all_reqs'])) {
-                $all_reqs_array = json_decode($_POST['all_reqs'], true) ?? [];
-                $checked_reqs_array = $_POST['checked_reqs'] ?? [];
+            if (in_array($action, ['Return', 'Decline']) && !empty($all_reqs_array)) {
                 $missing_reqs_array = array_diff($all_reqs_array, $checked_reqs_array);
 
                 $feedback = "";
@@ -812,8 +822,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Condition 2: Head-only for Approval workflows (overrides previous title if true)
-        if (workflowType === 'Approval' && !isHead) {
+        // Keep head-only approval for checklist-based documents. Without requirements,
+        // any user authorized for this queue stage can accept the document.
+        if (totalRequirements > 0 && workflowType === 'Approval' && !isHead) {
             acceptIsDisabled = true;
             acceptTitle = 'Only department heads can accept approval-type documents.';
         }

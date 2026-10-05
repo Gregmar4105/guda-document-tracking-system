@@ -37,6 +37,21 @@ function test_data_manager_count($conn, $table, $column, $id) {
 }
 
 function test_data_manager_delete_record($conn, $entity, $record_id) {
+    if ($entity === 'notification') {
+        if (!ctype_digit($record_id) || (int)$record_id < 1) {
+            throw new RuntimeException('Invalid notification ID.');
+        }
+        $notification_id = (int)$record_id;
+        $stmt = $conn->prepare('DELETE FROM notifications WHERE id = ?');
+        $stmt->bind_param('i', $notification_id);
+        if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete notification ' . $notification_id . '.');
+        }
+        $stmt->close();
+        return;
+    }
+
     if ($entity === 'voucher') {
         $stmt = $conn->prepare('SELECT voucher_code FROM vouchers WHERE voucher_code = ? FOR UPDATE');
         $stmt->bind_param('s', $record_id);
@@ -186,7 +201,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $transaction_started = false;
         $_SESSION['test_data_manager_notice'] = [
             'type' => 'success',
-            'message' => count($record_ids) . ' selected ' . ($entity === 'voucher' ? 'voucher(s)' : 'record(s)') . ' deleted successfully.'
+            'message' => count($record_ids) . ' selected ' . ($entity === 'voucher'
+                ? 'voucher(s)'
+                : ($entity === 'notification' ? 'notification(s)' : 'record(s)')) . ' deleted successfully.'
         ];
     } catch (Throwable $e) {
         if ($transaction_started) {
@@ -207,6 +224,7 @@ $vouchers = [];
 $document_types = [];
 $voucher_types = [];
 $users = [];
+$notifications = [];
 $load_error = '';
 
 try {
@@ -252,6 +270,18 @@ try {
     ");
     while ($row = $result->fetch_assoc()) {
         $users[] = $row;
+    }
+
+    $result = $conn->query("
+        SELECT n.id, n.user_id, n.voucher_code, n.message, n.link, n.is_read, n.created_at,
+               u.full_name AS recipient_name
+        FROM notifications n
+        LEFT JOIN users u ON u.user_id = n.user_id
+        ORDER BY n.created_at DESC, n.id DESC
+        LIMIT 200
+    ");
+    while ($row = $result->fetch_assoc()) {
+        $notifications[] = $row;
     }
 } catch (Throwable $e) {
     error_log('Test data manager load failed: ' . $e->getMessage());
@@ -299,7 +329,7 @@ $escape = static function ($value) {
     </header>
 
     <div class="warning">
-        <strong>Use only in a test environment.</strong> Deletions are permanent. Select multiple eligible records within a category and use “Delete selected.” Up to 200 newest live vouchers are listed at once; archived vouchers are not shown or deleted. Types and users linked to live or archived vouchers are protected; system-default document types and MIS administrator accounts are protected.
+        <strong>Use only in a test environment.</strong> Deletions are permanent. Select multiple eligible records within a category and use “Delete selected.” Up to 200 newest live vouchers and notifications are listed at once; archived vouchers are not shown or deleted. Types and users linked to live or archived vouchers are protected; system-default document types and MIS administrator accounts are protected.
     </div>
 
     <?php if ($notice): ?>
@@ -344,7 +374,17 @@ $escape = static function ($value) {
                 $escape($row['role']),
                 $escape((int)$row['live_vouchers'] + (int)$row['archived_vouchers'])
             ];
-        }, ['ID', 'Full name', 'Username', 'Role', 'Submitted vouchers']]
+        }, ['ID', 'Full name', 'Username', 'Role', 'Submitted vouchers']],
+        ['Notifications', $notifications, 'notification', static function ($row) use ($escape) {
+            return [
+                $escape($row['id']),
+                $escape($row['recipient_name'] ?? ('User ID ' . $row['user_id'])),
+                $escape($row['voucher_code'] ?? ''),
+                $escape($row['message']),
+                $escape($row['is_read'] ? 'Read' : 'Unread'),
+                $escape($row['created_at'])
+            ];
+        }, ['ID', 'Recipient', 'Voucher', 'Message', 'Status', 'Created']]
     ];
     foreach ($sections as $section):
     ?>

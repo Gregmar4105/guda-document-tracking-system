@@ -36,6 +36,124 @@ function test_data_manager_count($conn, $table, $column, $id) {
     return $count;
 }
 
+function test_data_manager_delete_record($conn, $entity, $record_id) {
+    if ($entity === 'voucher') {
+        $stmt = $conn->prepare('SELECT voucher_code FROM vouchers WHERE voucher_code = ? FOR UPDATE');
+        $stmt->bind_param('s', $record_id);
+        $stmt->execute();
+        $found = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$found) {
+            throw new RuntimeException('Live voucher ' . $record_id . ' was not found.');
+        }
+
+        $stmt = $conn->prepare('DELETE FROM notifications WHERE voucher_code = ?');
+        $stmt->bind_param('s', $record_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete notifications for voucher ' . $record_id . '.');
+        }
+        $stmt->close();
+
+        $stmt = $conn->prepare('DELETE FROM vouchers WHERE voucher_code = ?');
+        $stmt->bind_param('s', $record_id);
+        if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete live voucher ' . $record_id . '.');
+        }
+        $stmt->close();
+        return;
+    }
+
+    if ($entity === 'document_type' || $entity === 'voucher_type') {
+        if (!ctype_digit($record_id) || (int)$record_id < 1) {
+            throw new RuntimeException('Invalid type ID.');
+        }
+        $type_id = (int)$record_id;
+        $table = $entity === 'document_type' ? 'document_types' : 'voucher_types';
+        $reference_column = $entity === 'document_type' ? 'doc_type_id' : 'voucher_type_id';
+        $display_name = $entity === 'document_type' ? 'Document type' : 'Financial voucher type';
+
+        if ($entity === 'document_type') {
+            $stmt = $conn->prepare('SELECT is_system_default FROM document_types WHERE id = ? FOR UPDATE');
+        } else {
+            $stmt = $conn->prepare('SELECT id FROM voucher_types WHERE id = ? FOR UPDATE');
+        }
+        $stmt->bind_param('i', $type_id);
+        $stmt->execute();
+        $type_row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$type_row) {
+            throw new RuntimeException($display_name . ' ' . $type_id . ' was not found.');
+        }
+        if ($entity === 'document_type' && !empty($type_row['is_system_default'])) {
+            throw new RuntimeException('System-default document types cannot be deleted.');
+        }
+
+        $references = test_data_manager_count($conn, 'vouchers', $reference_column, $type_id)
+            + test_data_manager_count($conn, 'vouchers_archive', $reference_column, $type_id);
+        if ($references > 0) {
+            throw new RuntimeException($display_name . ' ' . $type_id . ' is still referenced by ' . $references . ' live or archived voucher(s).');
+        }
+
+        $stmt = $conn->prepare("DELETE FROM `$table` WHERE id = ?");
+        $stmt->bind_param('i', $type_id);
+        if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete ' . strtolower($display_name) . ' ' . $type_id . '.');
+        }
+        $stmt->close();
+        return;
+    }
+
+    if ($entity === 'user') {
+        if (!ctype_digit($record_id) || (int)$record_id < 1) {
+            throw new RuntimeException('Invalid user ID.');
+        }
+        $user_id = (int)$record_id;
+        if ($user_id === (int)($_SESSION['user_id'] ?? 0)) {
+            throw new RuntimeException('You cannot delete the account currently being used.');
+        }
+
+        $stmt = $conn->prepare('SELECT role FROM users WHERE user_id = ? FOR UPDATE');
+        $stmt->bind_param('i', $user_id);
+        $stmt->execute();
+        $user_row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$user_row) {
+            throw new RuntimeException('User ' . $user_id . ' was not found.');
+        }
+        if ($user_row['role'] === 'Management Information System Office') {
+            throw new RuntimeException('MIS administrator accounts cannot be deleted here.');
+        }
+
+        $references = test_data_manager_count($conn, 'vouchers', 'requestor_id', $user_id)
+            + test_data_manager_count($conn, 'vouchers_archive', 'requestor_id', $user_id);
+        if ($references > 0) {
+            throw new RuntimeException('User ' . $user_id . ' is linked to ' . $references . ' live or archived voucher(s).');
+        }
+
+        $stmt = $conn->prepare('UPDATE audit_logs_archive SET processed_by_user_id = NULL WHERE processed_by_user_id = ?');
+        $stmt->bind_param('i', $user_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Could not preserve archived audit records for user ' . $user_id . '.');
+        }
+        $stmt->close();
+
+        $stmt = $conn->prepare('DELETE FROM users WHERE user_id = ?');
+        $stmt->bind_param('i', $user_id);
+        if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete user ' . $user_id . '.');
+        }
+        $stmt->close();
+        return;
+    }
+
+    throw new RuntimeException('Unknown record type.');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf_token = $_POST['csrf_token'] ?? '';
     if (!is_string($csrf_token) || !hash_equals($_SESSION['test_data_manager_csrf'], $csrf_token)) {
@@ -44,122 +162,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    $entity = $_POST['entity'] ?? '';
-    $record_id = trim((string)($_POST['record_id'] ?? ''));
-    $message = '';
-    $conn->begin_transaction();
-
+    $transaction_started = false;
     try {
-        if ($entity === 'voucher') {
-            $stmt = $conn->prepare('SELECT voucher_code FROM vouchers WHERE voucher_code = ? FOR UPDATE');
-            $stmt->bind_param('s', $record_id);
-            $stmt->execute();
-            $found = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if (!$found) {
-                throw new RuntimeException('The live voucher was not found.');
-            }
-
-            $stmt = $conn->prepare('DELETE FROM notifications WHERE voucher_code = ?');
-            $stmt->bind_param('s', $record_id);
-            $stmt->execute();
-            $stmt->close();
-
-            $stmt = $conn->prepare('DELETE FROM vouchers WHERE voucher_code = ?');
-            $stmt->bind_param('s', $record_id);
-            if (!$stmt->execute()) {
-                $stmt->close();
-                throw new RuntimeException('Could not delete the voucher.');
-            }
-            $stmt->close();
-            $message = "Live voucher {$record_id} and its linked audit/document records were deleted.";
-        } elseif ($entity === 'document_type' || $entity === 'voucher_type') {
-            if (!ctype_digit($record_id) || (int)$record_id < 1) {
-                throw new RuntimeException('Invalid type ID.');
-            }
-            $type_id = (int)$record_id;
-            $table = $entity === 'document_type' ? 'document_types' : 'voucher_types';
-            $reference_column = $entity === 'document_type' ? 'doc_type_id' : 'voucher_type_id';
-            $display_name = $entity === 'document_type' ? 'Document type' : 'Financial voucher type';
-
-            if ($entity === 'document_type') {
-                $stmt = $conn->prepare('SELECT is_system_default FROM document_types WHERE id = ? FOR UPDATE');
-            } else {
-                $stmt = $conn->prepare('SELECT id FROM voucher_types WHERE id = ? FOR UPDATE');
-            }
-            $stmt->bind_param('i', $type_id);
-            $stmt->execute();
-            $type_row = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if (!$type_row) {
-                throw new RuntimeException($display_name . ' was not found.');
-            }
-            if ($entity === 'document_type' && !empty($type_row['is_system_default'])) {
-                throw new RuntimeException('System-default document types cannot be deleted.');
-            }
-
-            $references = test_data_manager_count($conn, 'vouchers', $reference_column, $type_id)
-                + test_data_manager_count($conn, 'vouchers_archive', $reference_column, $type_id);
-            if ($references > 0) {
-                throw new RuntimeException($display_name . ' is still referenced by ' . $references . ' live or archived voucher(s). Delete those vouchers first.');
-            }
-
-            $stmt = $conn->prepare("DELETE FROM `$table` WHERE id = ?");
-            $stmt->bind_param('i', $type_id);
-            if (!$stmt->execute()) {
-                $stmt->close();
-                throw new RuntimeException('Could not delete the selected type.');
-            }
-            $stmt->close();
-            $message = $display_name . ' deleted.';
-        } elseif ($entity === 'user') {
-            if (!ctype_digit($record_id) || (int)$record_id < 1) {
-                throw new RuntimeException('Invalid user ID.');
-            }
-            $user_id = (int)$record_id;
-            if ($user_id === (int)($_SESSION['user_id'] ?? 0)) {
-                throw new RuntimeException('You cannot delete the account currently being used.');
-            }
-
-            $stmt = $conn->prepare('SELECT role, username FROM users WHERE user_id = ? FOR UPDATE');
-            $stmt->bind_param('i', $user_id);
-            $stmt->execute();
-            $user_row = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if (!$user_row) {
-                throw new RuntimeException('The user was not found.');
-            }
-            if ($user_row['role'] === 'Management Information System Office') {
-                throw new RuntimeException('MIS administrator accounts cannot be deleted here.');
-            }
-
-            $references = test_data_manager_count($conn, 'vouchers', 'requestor_id', $user_id)
-                + test_data_manager_count($conn, 'vouchers_archive', 'requestor_id', $user_id);
-            if ($references > 0) {
-                throw new RuntimeException('This user is linked to ' . $references . ' live or archived voucher(s). Delete those vouchers first.');
-            }
-
-            $stmt = $conn->prepare('UPDATE audit_logs_archive SET processed_by_user_id = NULL WHERE processed_by_user_id = ?');
-            $stmt->bind_param('i', $user_id);
-            $stmt->execute();
-            $stmt->close();
-
-            $stmt = $conn->prepare('DELETE FROM users WHERE user_id = ?');
-            $stmt->bind_param('i', $user_id);
-            if (!$stmt->execute()) {
-                $stmt->close();
-                throw new RuntimeException('Could not delete the selected user.');
-            }
-            $stmt->close();
-            $message = 'User account deleted. Linked notifications were removed, and audit-log references were retained anonymously.';
-        } else {
-            throw new RuntimeException('Unknown record type.');
+        $entity = $_POST['entity'] ?? '';
+        $record_ids = $_POST['record_ids'] ?? [];
+        if (!is_array($record_ids) || count($record_ids) < 1 || count($record_ids) > 200) {
+            throw new RuntimeException('Select between 1 and 200 records to delete.');
         }
 
+        $record_ids = array_values(array_unique(array_map(static function ($id) {
+            return is_scalar($id) ? trim((string)$id) : '';
+        }, $record_ids)));
+        if (in_array('', $record_ids, true)) {
+            throw new RuntimeException('One or more selected record IDs are invalid.');
+        }
+
+        $conn->begin_transaction();
+        $transaction_started = true;
+        foreach ($record_ids as $record_id) {
+            test_data_manager_delete_record($conn, $entity, $record_id);
+        }
         $conn->commit();
-        $_SESSION['test_data_manager_notice'] = ['type' => 'success', 'message' => $message];
+        $transaction_started = false;
+        $_SESSION['test_data_manager_notice'] = [
+            'type' => 'success',
+            'message' => count($record_ids) . ' selected ' . ($entity === 'voucher' ? 'voucher(s)' : 'record(s)') . ' deleted successfully.'
+        ];
     } catch (Throwable $e) {
-        $conn->rollback();
+        if ($transaction_started) {
+            $conn->rollback();
+        }
         error_log('Test data manager operation failed: ' . $e->getMessage());
         $error_message = $e instanceof RuntimeException
             ? $e->getMessage()
@@ -253,6 +285,8 @@ $escape = static function ($value) {
         th { background: #f8fafc; color: #1e3a8a; }
         .delete-button { background: #dc2626; color: white; border: 0; border-radius: 5px; padding: 8px 12px; cursor: pointer; }
         .delete-button:disabled { background: #9ca3af; cursor: not-allowed; }
+        .bulk-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .select-record { width: 18px; height: 18px; }
         .muted { color: #64748b; }
         @media (max-width: 768px) { .main-content { padding: 24px 12px; } }
     </style>
@@ -265,7 +299,7 @@ $escape = static function ($value) {
     </header>
 
     <div class="warning">
-        <strong>Use only in a test environment.</strong> Deletions are permanent. Up to 200 newest live vouchers are listed at once; archived vouchers are not shown or deleted. Types and users linked to live or archived vouchers are protected; system-default document types and MIS administrator accounts are protected.
+        <strong>Use only in a test environment.</strong> Deletions are permanent. Select multiple eligible records within a category and use “Delete selected.” Up to 200 newest live vouchers are listed at once; archived vouchers are not shown or deleted. Types and users linked to live or archived vouchers are protected; system-default document types and MIS administrator accounts are protected.
     </div>
 
     <?php if ($notice): ?>
@@ -319,11 +353,18 @@ $escape = static function ($value) {
             <?php if (empty($section[1])): ?>
                 <p class="muted">No records.</p>
             <?php else: ?>
+                <form method="POST" class="bulk-delete-form" onsubmit="return confirm('Permanently delete all selected records in this section? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="<?php echo $escape($_SESSION['test_data_manager_csrf']); ?>">
+                <input type="hidden" name="entity" value="<?php echo $escape($section[2]); ?>">
+                <div class="bulk-actions">
+                    <button class="delete-button" type="submit">Delete selected</button>
+                    <span class="muted">Select one or more eligible records below. Protected records cannot be selected.</span>
+                </div>
                 <table>
                     <thead>
                         <tr>
+                            <th><input class="select-record select-all" type="checkbox" aria-label="Select all eligible records"></th>
                             <?php foreach ($section[4] as $heading): ?><th><?php echo $escape($heading); ?></th><?php endforeach; ?>
-                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -341,23 +382,43 @@ $escape = static function ($value) {
                                 ));
                             ?>
                             <tr>
-                                <?php foreach ($section[3]($row) as $cell): ?><td><?php echo $cell; ?></td><?php endforeach; ?>
                                 <td>
-                                    <form method="POST" onsubmit="return confirm('Permanently delete this selected record? This cannot be undone.');">
-                                        <input type="hidden" name="csrf_token" value="<?php echo $escape($_SESSION['test_data_manager_csrf']); ?>">
-                                        <input type="hidden" name="entity" value="<?php echo $escape($section[2]); ?>">
-                                        <input type="hidden" name="record_id" value="<?php echo $escape($section[2] === 'voucher' ? $row['voucher_code'] : ($section[2] === 'user' ? $row['user_id'] : $row['id'])); ?>">
-                                        <button class="delete-button" type="submit" <?php echo $protected ? 'disabled title="This record is protected or still referenced."' : ''; ?>>Delete</button>
-                                    </form>
+                                    <input class="select-record record-checkbox" type="checkbox" name="record_ids[]" value="<?php echo $escape($section[2] === 'voucher' ? $row['voucher_code'] : ($section[2] === 'user' ? $row['user_id'] : $row['id'])); ?>" <?php echo $protected ? 'disabled title="This record is protected or still referenced."' : ''; ?> aria-label="Select record">
                                 </td>
+                                <?php foreach ($section[3]($row) as $cell): ?><td><?php echo $cell; ?></td><?php endforeach; ?>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                </form>
             <?php endif; ?>
         </section>
     <?php endforeach; ?>
 </div>
+<script>
+document.querySelectorAll('.bulk-delete-form').forEach(function (form) {
+    var selectAll = form.querySelector('.select-all');
+    var checkboxes = Array.from(form.querySelectorAll('.record-checkbox:not(:disabled)'));
+    selectAll.addEventListener('change', function () {
+        checkboxes.forEach(function (checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+    });
+    checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', function () {
+            selectAll.checked = checkboxes.length > 0 && checkboxes.every(function (item) {
+                return item.checked;
+            });
+        });
+    });
+    form.addEventListener('submit', function (event) {
+        if (!checkboxes.some(function (checkbox) { return checkbox.checked; })) {
+            event.preventDefault();
+            alert('Select at least one eligible record.');
+        }
+    });
+});
+</script>
 </body>
 </html>
 <?php $conn->close(); ?>

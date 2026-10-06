@@ -5,6 +5,7 @@ if (!isset($_SESSION['logged_in'])) { header("Location: login.php"); exit(); }
 require_once 'db_connect.php';
 
 $voucher_found = null;
+$requestor_is_current_route_assignee = false;
 $search_error = "";
 $success_msg = "";
 $dept_role = $_SESSION['role'];
@@ -200,6 +201,15 @@ if (isset($_GET['select_id']) && !empty($_GET['select_id'])) {
 
     if (!$voucher_found) {
         $search_error = "Voucher ID not found.";
+    } else {
+        $route_steps = json_decode($voucher_found['custom_workflow'] ?? '[]', true);
+        if (is_array($route_steps) && !empty($route_steps)) {
+            $current_stage_key = max(0, (int)$voucher_found['current_stage_index'] - 1);
+            $current_stage_target = $route_steps[$current_stage_key] ?? null;
+            if (is_string($current_stage_target) && preg_match('/^ACCOUNT:(\d+)$/i', $current_stage_target, $route_match)) {
+                $requestor_is_current_route_assignee = ((int)$route_match[1] === (int)($voucher_found['requestor_id'] ?? 0) && (int)($voucher_found['requestor_id'] ?? 0) === (int)$user_id);
+            }
+        }
     }
 
     // --- DSS (Decision Support System) LOGIC ---
@@ -402,6 +412,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             // Get custom workflow or fallback to global settings
             $custom_workflow = json_decode($verify_row['custom_workflow'], true);
             if (empty($custom_workflow)) { $custom_workflow = $workflow_sequence; }
+
+            $requestor_is_current_route_assignee = false;
+            if (is_array($custom_workflow) && !empty($custom_workflow)) {
+                $current_stage_0_indexed = (int)$verify_row['current_stage_index'] - 1;
+                $current_stage_target = $custom_workflow[$current_stage_0_indexed] ?? null;
+                if (is_string($current_stage_target) && preg_match('/^ACCOUNT:(\d+)$/i', $current_stage_target, $route_match)) {
+                    $requestor_is_current_route_assignee = ((int)$route_match[1] === (int)$requestor_id_for_notif && (int)$requestor_id_for_notif === (int)$user_id);
+                }
+            }
             
             // Get the expected department from the workflow (0-indexed array)
             $current_stage_0_indexed = $verify_row['current_stage_index'] - 1;
@@ -463,6 +482,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
 
             if (!$verify_row || !$is_authorized_to_process) {
                 $search_error = "Validation Failed: Voucher is no longer in your department's queue.";
+            } elseif ($requestor_id_for_notif == $user_id && !$requestor_is_current_route_assignee) {
+                $search_error = "Validation Failed: You cannot process a document that you submitted unless your account is explicitly assigned to the active routing stage.";
             } else {
                 $new_status = "";
                 $log_action = "";
@@ -772,14 +793,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
         <div class="action-panel">
             <h3 style="color: var(--naap-navy); margin-top: 0;">Release Document</h3>
             
-            <?php if ($voucher_found['requestor_id'] == $user_id): ?>
+            <?php if ($voucher_found['requestor_id'] == $user_id && !$requestor_is_current_route_assignee): ?>
                 <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 20px; text-align: center; border-radius: 4px;">
                     <strong style="color: #92400e;">Conflict of Interest</strong>
-                    <p style="color: #92400e; font-size: 0.9rem; margin: 5px 0 0 0;">You cannot process a document that you submitted.</p>
+                    <p style="color: #92400e; font-size: 0.9rem; margin: 5px 0 0 0;">You cannot process a document that you submitted unless your account is explicitly assigned to the active routing step.</p>
                 </div>
             <?php else: ?>
                 <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
-                    Acting as: <strong><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Signatory'); ?></strong>. Submitting a decision will record your <strong>Time Out</strong>.
+                    Acting as: <strong><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Signatory'); ?></strong>. <?php if ($voucher_found['requestor_id'] == $user_id): ?>Your account is assigned to this routing step, so you may continue processing this document.<?php else: ?>Submitting a decision will record your <strong>Time Out</strong>.<?php endif; ?>
                 </p>
                 <form method="POST" id="decisionForm">
                     <input type="hidden" name="voucher_id" value="<?php echo htmlspecialchars($voucher_found['voucher_code']); ?>">

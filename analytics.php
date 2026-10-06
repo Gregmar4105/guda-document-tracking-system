@@ -152,6 +152,13 @@ if ($lapsed_res && $lapsed_row = $lapsed_res->fetch_assoc()) {
 $late_processing_threshold = 3;
 $late_processing_summary = [];
 $late_processing_error = '';
+$default_late_processing_route = [];
+$default_late_processing_route_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 AND is_active = 1 ORDER BY name ASC");
+if ($default_late_processing_route_res) {
+    while ($route_row = $default_late_processing_route_res->fetch_assoc()) {
+        $default_late_processing_route[] = $route_row['name'];
+    }
+}
 $late_processing_res = $conn->query("
     SELECT
         al.log_id,
@@ -161,19 +168,30 @@ $late_processing_res = $conn->query("
         u.full_name,
         al.action_taken,
         al.created_at,
-        v.arta_deadline
+        v.arta_deadline,
+        v.status,
+        v.current_stage_index,
+        v.custom_workflow,
+        requestor.role AS requestor_department
     FROM audit_logs al
     INNER JOIN vouchers v ON v.voucher_code = al.voucher_code
     LEFT JOIN users u ON u.user_id = al.processed_by_user_id
+    LEFT JOIN users requestor ON requestor.user_id = v.requestor_id
     WHERE al.action_taken IN ('Scan-to-Receive', 'Accepted', 'RETURNED', 'DECLINED')
       AND v.arta_deadline IS NOT NULL
-      AND EXISTS (
-          SELECT 1
-          FROM audit_logs late_action
-          WHERE late_action.voucher_code = v.voucher_code
-            AND late_action.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
-            AND late_action.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-            AND DATE(late_action.created_at) > v.arta_deadline
+      AND (
+          EXISTS (
+              SELECT 1
+              FROM audit_logs late_action
+              WHERE late_action.voucher_code = v.voucher_code
+                AND late_action.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
+                AND late_action.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                AND DATE(late_action.created_at) > v.arta_deadline
+          )
+          OR (
+              v.status IN ('Pending Review', 'Processing', 'In Transit')
+              AND v.arta_deadline < CURDATE()
+          )
       )
     ORDER BY al.voucher_code, al.created_at, al.log_id
 ");
@@ -190,7 +208,15 @@ if ($late_processing_res) {
             // Keep the earliest open receipt for this office stage. It determines
             // whether the office had the document before its deadline passed.
             if (!isset($received_stages[$voucher_code][$office])) {
-                $received_stages[$voucher_code][$office] = $late_row['created_at'];
+                $received_stages[$voucher_code][$office] = [
+                    'received_at' => $late_row['created_at'],
+                    'received_by_user_id' => (int)($late_row['processed_by_user_id'] ?? 0),
+                    'voucher_status' => $late_row['status'],
+                    'current_stage_index' => (int)$late_row['current_stage_index'],
+                    'custom_workflow' => $late_row['custom_workflow'],
+                    'arta_deadline' => $late_row['arta_deadline'],
+                    'requestor_department' => $late_row['requestor_department']
+                ];
             }
             continue;
         }
@@ -199,7 +225,7 @@ if ($late_processing_res) {
             continue;
         }
 
-        $received_at = $received_stages[$voucher_code][$office];
+        $received_at = $received_stages[$voucher_code][$office]['received_at'];
         unset($received_stages[$voucher_code][$office]);
         $deadline = $late_row['arta_deadline'];
         $received_date = substr($received_at, 0, 10);
@@ -241,6 +267,88 @@ if ($late_processing_res) {
             if (!isset($late_processing_summary[$account_key]['late_documents'][$late_row['voucher_code']])) {
                 $late_processing_summary[$account_key]['late_documents'][$late_row['voucher_code']] = $days_late;
                 $late_processing_summary[$account_key]['days_late_total'] += $days_late;
+            }
+        }
+    }
+
+    // Include overdue documents that are still waiting at their current stage.
+    // They have no late decision yet, so attribute them to the receiving account
+    // and office only when the receipt is still open at the active route step.
+    foreach ($received_stages as $voucher_code => $offices) {
+        foreach ($offices as $office => $receipt) {
+            if (!in_array($receipt['voucher_status'], ['Pending Review', 'Processing', 'In Transit'], true)) {
+                continue;
+            }
+
+            $deadline = $receipt['arta_deadline'];
+            $received_date = substr($receipt['received_at'], 0, 10);
+            if (!$deadline || $deadline >= date('Y-m-d') || $received_date > $deadline) {
+                continue;
+            }
+
+            $route = json_decode((string)$receipt['custom_workflow'], true);
+            $current_stage = null;
+            if (is_array($route) && !empty($route)) {
+                $current_stage = $route[$receipt['current_stage_index'] - 1] ?? null;
+            } else {
+                $current_stage = $default_late_processing_route[$receipt['current_stage_index'] - 1] ?? null;
+            }
+
+            $is_current_holder = false;
+            if (is_string($current_stage) && preg_match('/^ACCOUNT:(\d+)$/i', $current_stage, $account_match)) {
+                $is_current_holder = (int)$account_match[1] === $receipt['received_by_user_id'];
+            } elseif (is_string($current_stage)) {
+                $normalize_route_name = static function ($value) {
+                    return strtolower(trim(preg_replace('/\s*\(Head\)$/i', '', str_replace(['–', '—'], '-', (string)$value))));
+                };
+                if ($current_stage === 'Department Head') {
+                    $is_current_holder = $normalize_route_name($receipt['requestor_department']) === $normalize_route_name($office);
+                } elseif (preg_match('/^(.*) \(Head\)$/i', $current_stage, $head_match)) {
+                    $is_current_holder = $normalize_route_name($head_match[1]) === $normalize_route_name($office);
+                } else {
+                    $is_current_holder = $normalize_route_name($current_stage) === $normalize_route_name($office);
+                }
+            }
+
+            if (!$is_current_holder) {
+                continue;
+            }
+
+            $days_late = max(1, (int)((strtotime(date('Y-m-d')) - strtotime($deadline)) / 86400));
+            $office_key = 'office:' . $office;
+            if (!isset($late_processing_summary[$office_key])) {
+                $late_processing_summary[$office_key] = [
+                    'scope' => 'Office',
+                    'name' => $office,
+                    'late_documents' => [],
+                    'days_late_total' => 0
+                ];
+            }
+            if (!isset($late_processing_summary[$office_key]['late_documents'][$voucher_code])) {
+                $late_processing_summary[$office_key]['late_documents'][$voucher_code] = $days_late;
+                $late_processing_summary[$office_key]['days_late_total'] += $days_late;
+            }
+
+            if ($receipt['received_by_user_id'] > 0) {
+                $account_key = 'account:' . $receipt['received_by_user_id'];
+                if (!isset($late_processing_summary[$account_key])) {
+                    $account_name = 'User #' . $receipt['received_by_user_id'];
+                    $account_stmt = $conn->prepare("SELECT full_name FROM users WHERE user_id = ? LIMIT 1");
+                    $account_stmt->bind_param("i", $receipt['received_by_user_id']);
+                    $account_stmt->execute();
+                    $account_name = $account_stmt->get_result()->fetch_assoc()['full_name'] ?? $account_name;
+                    $account_stmt->close();
+                    $late_processing_summary[$account_key] = [
+                        'scope' => 'Account',
+                        'name' => $account_name . ' — ' . $office,
+                        'late_documents' => [],
+                        'days_late_total' => 0
+                    ];
+                }
+                if (!isset($late_processing_summary[$account_key]['late_documents'][$voucher_code])) {
+                    $late_processing_summary[$account_key]['late_documents'][$voucher_code] = $days_late;
+                    $late_processing_summary[$account_key]['days_late_total'] += $days_late;
+                }
             }
         }
     }
@@ -705,15 +813,15 @@ if ($live_status_res) {
 
         <div class="page-header" style="margin-top: 60px;">
             <h1>Late Processing DSS</h1>
-            <p>Offices that held documents past their ARTA deadline, and the accounts that recorded the late decision, during the last 30 days.</p>
+            <p>Late decisions recorded in the last 30 days and documents that are still overdue at their current office or assigned account.</p>
         </div>
         <div class="table-responsive">
             <?php if ($late_processing_error !== ''): ?>
                 <p class="alert-error">Late-processing analytics could not be loaded. Please check the application error log.</p>
             <?php else: ?>
                 <p style="margin-top: 0; color: var(--text-muted);">
-                    DSS trigger: <?php echo $late_processing_threshold; ?> or more distinct late documents in 30 days.
-                    An office is counted only when it received the document on or before its deadline and processed it afterward. Later offices that received an already-overdue document are not attributed the delay. A decision on the deadline date is considered on time.
+                    DSS trigger: <?php echo $late_processing_threshold; ?> or more distinct documents attributed to an office or account: late decisions recorded in the last 30 days plus documents still overdue at their current routing stage.
+                    An office is counted only when it received the document on or before its deadline and processed it afterward, or is still holding it past the deadline. Later offices that received an already-overdue document are not attributed the delay. A decision on the deadline date is considered on time.
                 </p>
                 <table>
                     <thead>
@@ -729,7 +837,7 @@ if ($live_status_res) {
                         <?php if (empty($late_processing_summary)): ?>
                             <tr>
                                 <td colspan="5" style="text-align: center; color: var(--text-muted);">
-                                    No processing decisions were recorded after their ARTA deadlines in the last 30 days.
+                                    No late decisions or currently overdue documents held past their ARTA deadlines were found.
                                 </td>
                             </tr>
                         <?php else: ?>

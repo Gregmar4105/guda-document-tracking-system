@@ -737,7 +737,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             <div class="info-row" style="border-bottom: none;">
                 <label>Purpose / Description
                 </label>
-                <p style="margin-top: 5px; line-height: 1.5; color: var(--text-dark); background: var(--bg-gray); padding: 15px; border-radius: 6px; border: 1px solid var(--border-light);"><?php echo htmlspecialchars($voucher_found['purpose']); ?></p>
+                <p style="margin-top: 5px; line-height: 1.5; color: var(--text-dark); background: var(--bg-gray); padding: 15px; border-radius: 6px; border: 1px solid var(--border-light);"><?php echo htmlspecialchars($voucher_found['purpose'] ?? 'Not provided', ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
 
             <?php

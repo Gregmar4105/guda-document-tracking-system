@@ -71,6 +71,14 @@ function test_data_manager_delete_record($conn, $entity, $record_id) {
         }
         $stmt->close();
 
+        $stmt = $conn->prepare('DELETE FROM audit_logs WHERE voucher_code = ?');
+        $stmt->bind_param('s', $record_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete audit history for voucher ' . $record_id . '.');
+        }
+        $stmt->close();
+
         $stmt = $conn->prepare('DELETE FROM vouchers WHERE voucher_code = ?');
         $stmt->bind_param('s', $record_id);
         if (!$stmt->execute() || $stmt->affected_rows !== 1) {
@@ -288,6 +296,124 @@ function test_data_manager_create_document($conn, $post) {
     return $voucher_code;
 }
 
+function test_data_manager_create_hr_dss_demo($conn) {
+    $department = 'Human Resource Management Services Division';
+
+    $stmt = $conn->prepare('SELECT id FROM departments WHERE name = ? AND is_signatory = 1 AND is_active = 1 LIMIT 1 FOR UPDATE');
+    if (!$stmt) {
+        throw new RuntimeException('Could not prepare the HR department check.');
+    }
+    $stmt->bind_param('s', $department);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('Could not verify the HR department.');
+    }
+    $department_row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$department_row) {
+        throw new RuntimeException('The active HR division signatory station was not found.');
+    }
+
+    $stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ? AND is_head = 1 ORDER BY user_id LIMIT 1 FOR UPDATE");
+    if (!$stmt) {
+        throw new RuntimeException('Could not prepare the HR Head check.');
+    }
+    $stmt->bind_param('s', $department);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('Could not verify the HR Head account.');
+    }
+    $hr_head = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$hr_head) {
+        throw new RuntimeException('An HR Head account is required to create the DSS demonstration data.');
+    }
+    $hr_head_id = (int)$hr_head['user_id'];
+
+    $hr_document_type_id = null;
+    $type_result = $conn->query("SELECT id FROM document_types WHERE category = 'HR' AND is_active = 1 ORDER BY id LIMIT 1");
+    if (!$type_result) {
+        throw new RuntimeException('Could not check for an active HR document type.');
+    }
+    if ($type_result && $type_row = $type_result->fetch_assoc()) {
+        $hr_document_type_id = (int)$type_row['id'];
+    }
+    $type_result->close();
+
+    $today = new DateTimeImmutable('today');
+    $deadline = $today->modify('-5 days');
+    $received_at = $deadline->modify('-1 day')->format('Y-m-d') . ' 09:00:00';
+    $submitted_at = $deadline->modify('-3 days')->format('Y-m-d') . ' 09:00:00';
+    $route = json_encode([$department . ' (Head)']);
+    if ($route === false) {
+        throw new RuntimeException('Could not prepare the HR DSS demonstration route.');
+    }
+    $requestor_id = (int)($_SESSION['user_id'] ?? 0);
+    if ($requestor_id < 1) {
+        throw new RuntimeException('Could not identify the administrator creating the HR DSS demonstration data.');
+    }
+    $deadline_date = $deadline->format('Y-m-d');
+
+    $voucher_stmt = $conn->prepare("
+        INSERT INTO vouchers
+            (voucher_code, requestor_id, document_title, doc_type_id, voucher_type_id,
+             date_submitted, status, workflow_type, current_stage_index, custom_workflow, arta_deadline)
+        VALUES (?, ?, ?, ?, NULL, ?, 'Pending Review', 'Approval', 1, ?, ?)
+    ");
+    if (!$voucher_stmt) {
+        throw new RuntimeException('Could not prepare the HR DSS demonstration documents.');
+    }
+
+    $log_stmt = $conn->prepare("
+        INSERT INTO audit_logs
+            (voucher_code, department, action_taken, remarks, processed_by_user_id, created_at)
+        VALUES (?, ?, 'Scan-to-Receive', ?, ?, ?)
+    ");
+    if (!$log_stmt) {
+        $voucher_stmt->close();
+        throw new RuntimeException('Could not prepare the HR DSS demonstration receipt history.');
+    }
+
+    $titles = [
+        '[TEST] DSS Demo - HR Leave Application',
+        '[TEST] DSS Demo - Personnel Action Form',
+        '[TEST] DSS Demo - Staff Training Request'
+    ];
+    $created_codes = [];
+    foreach ($titles as $title) {
+        $voucher_code = 'TEST-DSS-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
+        $doc_type_id = $hr_document_type_id;
+        $voucher_stmt->bind_param(
+            'sisisss',
+            $voucher_code,
+            $requestor_id,
+            $title,
+            $doc_type_id,
+            $submitted_at,
+            $route,
+            $deadline_date
+        );
+        if (!$voucher_stmt->execute()) {
+            $voucher_stmt->close();
+            $log_stmt->close();
+            throw new RuntimeException('Could not create an HR DSS demonstration document.');
+        }
+
+        $remarks = 'TEST DATA: intentionally overdue HR DSS demonstration item; received before the ARTA deadline and still pending.';
+        $log_stmt->bind_param('sssis', $voucher_code, $department, $remarks, $hr_head_id, $received_at);
+        if (!$log_stmt->execute()) {
+            $voucher_stmt->close();
+            $log_stmt->close();
+            throw new RuntimeException('Could not create receipt history for an HR DSS demonstration document.');
+        }
+        $created_codes[] = $voucher_code;
+    }
+
+    $voucher_stmt->close();
+    $log_stmt->close();
+    return $created_codes;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf_token = $_POST['csrf_token'] ?? '';
     if (!is_string($csrf_token) || !hash_equals($_SESSION['test_data_manager_csrf'], $csrf_token)) {
@@ -308,6 +434,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'type' => 'success',
                 'message' => 'Test document created as ' . $voucher_code . '. No workflow actions or notifications were generated.',
                 'track_code' => $voucher_code
+            ];
+            header('Location: test_data_manager.php');
+            exit();
+        }
+
+        if (($_POST['action'] ?? '') === 'create_hr_dss_demo') {
+            $conn->begin_transaction();
+            $transaction_started = true;
+            $created_codes = test_data_manager_create_hr_dss_demo($conn);
+            $conn->commit();
+            $transaction_started = false;
+            $_SESSION['test_data_manager_notice'] = [
+                'type' => 'success',
+                'message' => 'Created 3 overdue HR DSS demo documents: ' . implode(', ', $created_codes) . '. Delete these TEST-DSS vouchers from Live vouchers to remove their records and audit history.'
             ];
             header('Location: test_data_manager.php');
             exit();
@@ -507,7 +647,7 @@ $escape = static function ($value) {
     </header>
 
     <div class="warning">
-        <strong>Use only in a test environment.</strong> Deletions are permanent. Test documents are prefixed with [TEST], can use active or inactive document types, and do not generate workflow actions or notifications when created. To demonstrate an overdue document, choose a deadline before today while keeping its status active; analytics will count it as overdue. When the deadline processor runs, it can mark the document Lapsed and issue normal alerts. Up to 200 live vouchers are listed (test documents first), and the 200 newest notifications are shown; archived vouchers are not shown or deleted.
+        <strong>Use only in a test environment.</strong> Deletions are permanent. Test documents are prefixed with [TEST]. The HR DSS demo action below creates three intentionally overdue documents assigned to the HR Head; delete the generated TEST-DSS vouchers from Live vouchers when finished. Other test documents created here do not generate workflow actions or notifications. The deadline processor can mark overdue live documents Lapsed and issue normal alerts. Up to 200 live vouchers are listed (test documents first), and the 200 newest notifications are shown; archived vouchers are not shown or deleted.
     </div>
 
     <?php if ($notice): ?>
@@ -519,6 +659,16 @@ $escape = static function ($value) {
     <?php if ($load_error !== ''): ?>
         <div class="notice error"><?php echo $escape($load_error); ?></div>
     <?php endif; ?>
+
+    <section class="record-section">
+        <h2>HR Head Late Processing DSS demo</h2>
+        <p class="muted">Creates three clearly labeled, active test documents that were received by the HR Head before an ARTA deadline five days ago and remain pending. They will trigger the DSS three-document alert threshold for both the HR office and assigned account.</p>
+        <form method="POST" onsubmit="return confirm('Create three overdue TEST-DSS documents for the HR Head? Delete the TEST-DSS vouchers afterward to remove them.');">
+            <input type="hidden" name="csrf_token" value="<?php echo $escape($_SESSION['test_data_manager_csrf']); ?>">
+            <input type="hidden" name="action" value="create_hr_dss_demo">
+            <button class="form-submit" type="submit">Create HR DSS demo data</button>
+        </form>
+    </section>
 
     <section class="record-section">
         <h2>Create a test document</h2>

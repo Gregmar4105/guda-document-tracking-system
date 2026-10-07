@@ -719,6 +719,13 @@ if ($live_status_res) {
     <title>System Analytics - NAAP</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="analytics.css?v=<?php echo @filemtime('analytics.css'); ?>">
+    <?php if ($is_hr_head): ?>
+    <style>
+        @media print {
+            @page { size: landscape; margin: 12mm; }
+        }
+    </style>
+    <?php endif; ?>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* Styles for the new Live Performance Monitoring table */
@@ -753,7 +760,7 @@ if ($live_status_res) {
         }
     </style>
 </head>
-<body>
+<body class="<?php echo $is_hr_head ? 'hr-head-analytics' : ''; ?>">
 
 <?php include 'sidebar.php'; ?>
 
@@ -763,6 +770,12 @@ if ($live_status_res) {
             <h1>System Analytics</h1>
             <p>High-level overview of system performance and compliance.</p>
         </div>
+
+        <?php if ($is_hr_head): ?>
+        <div class="button-group">
+            <button type="button" class="btn-print" onclick="window.print()">Print Analytics</button>
+        </div>
+        <?php endif; ?>
 
         <div class="stats-grid">
             <!-- ARTA Compliance Rate Card -->

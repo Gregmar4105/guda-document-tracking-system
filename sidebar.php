@@ -57,18 +57,21 @@ $is_admin = $is_mis || $is_acct_head; // HR Head is not a system admin for setti
 
 $is_signatory = in_array($user_role, $signatory_roles);
 $notification_count = 0;
+$latest_notification_id = 0;
 
 // Fetch notification count if user is logged in and a DB connection is available.
 if (isset($_SESSION['user_id']) && isset($conn) && !$conn->connect_error) {
     $current_user_id_for_notif = $_SESSION['user_id'];
     
     // Use the existing connection from the parent script
-    $count_stmt = $conn->prepare("SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = ? AND is_read = 0");
+    $count_stmt = $conn->prepare("SELECT COALESCE(SUM(is_read = 0), 0) AS unread_count, COALESCE(MAX(id), 0) AS latest_notification_id FROM notifications WHERE user_id = ?");
     if ($count_stmt) {
         $count_stmt->bind_param("i", $current_user_id_for_notif);
         $count_stmt->execute();
         $count_result = $count_stmt->get_result();
-        $notification_count = $count_result->fetch_assoc()['unread_count'] ?? 0;
+        $notification_row = $count_result->fetch_assoc();
+        $notification_count = (int)($notification_row['unread_count'] ?? 0);
+        $latest_notification_id = (int)($notification_row['latest_notification_id'] ?? 0);
         $count_stmt->close();
     }
 }
@@ -104,7 +107,7 @@ $dot_color = '#10b981';
 
     <nav>
         <a href="home.php" class="<?php echo ($current_page == 'home.php') ? 'active' : ''; ?>">Dashboard</a>
-        <a href="notifications.php" class="<?php echo ($current_page == 'notifications.php') ? 'active' : ''; ?>">
+        <a id="notifications-nav-link" href="notifications.php" data-latest-notification-id="<?php echo $latest_notification_id; ?>" class="<?php echo ($current_page == 'notifications.php') ? 'active' : ''; ?>">
             Notifications
             <span class="notif-badge" id="notif-badge" <?php if ($notification_count <= 0) echo 'style="display: none;"'; ?>><?php echo $notification_count; ?></span>
         </a>
@@ -150,6 +153,7 @@ $dot_color = '#10b981';
         <a href="logout.php" style="margin-top: 20px; color: #fca5a5; font-weight: bold;">Logout</a>
     </nav>
 </div>
+<div id="live-notification-region" class="live-notification-region" aria-live="polite" aria-relevant="additions"></div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -170,33 +174,119 @@ $dot_color = '#10b981';
 
         // --- REAL-TIME NOTIFICATION POLLING ---
         const notifBadge = document.getElementById('notif-badge');
-        let currentCount = parseInt(notifBadge.textContent) || 0;
+        const notificationsLink = document.getElementById('notifications-nav-link');
+        const notificationList = document.querySelector('.notification-list');
+        const liveRegion = document.getElementById('live-notification-region');
+        let latestNotificationId = parseInt(notificationsLink?.dataset.latestNotificationId || '0', 10);
+        let pollingNotifications = false;
+
+        function safeNotificationUrl(link) {
+            try {
+                const url = new URL(link || 'notifications.php', window.location.href);
+                return url.origin === window.location.origin ? url.href : 'notifications.php';
+            } catch (error) {
+                return 'notifications.php';
+            }
+        }
+
+        function appendNotification(notification) {
+            if (!notificationList) return;
+
+            const emptyState = notificationList.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const link = document.createElement('a');
+            link.href = safeNotificationUrl(notification.link);
+            link.style.textDecoration = 'none';
+            link.style.color = 'inherit';
+
+            const item = document.createElement('div');
+            item.className = 'notification-item';
+            if (!notification.is_read) {
+                item.style.backgroundColor = '#eef2ff';
+                item.style.borderLeftColor = 'var(--naap-navy)';
+            }
+
+            const header = document.createElement('div');
+            header.className = 'notification-header';
+            const title = document.createElement('strong');
+            title.textContent = 'Document Update';
+            const timestamp = document.createElement('span');
+            timestamp.className = 'notification-timestamp';
+            const date = new Date(String(notification.created_at).replace(' ', 'T'));
+            timestamp.textContent = Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+            header.append(title, timestamp);
+
+            const message = document.createElement('p');
+            message.className = 'notification-remarks';
+            message.textContent = notification.message || '';
+            item.append(header, message);
+            link.appendChild(item);
+            notificationList.prepend(link);
+        }
+
+        function showNotificationToast(notification) {
+            if (!liveRegion) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'live-notification-toast';
+            toast.setAttribute('role', 'status');
+
+            const link = document.createElement('a');
+            link.href = safeNotificationUrl(notification.link);
+            link.textContent = notification.message || 'You have a new notification.';
+
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'live-notification-close';
+            close.setAttribute('aria-label', 'Dismiss notification');
+            close.textContent = '×';
+            close.addEventListener('click', function () {
+                toast.remove();
+            });
+
+            toast.append(link, close);
+            liveRegion.appendChild(toast);
+            window.setTimeout(function () {
+                toast.remove();
+            }, 10000);
+        }
 
         function checkNotifications() {
-            fetch('check_notifications.php')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
+            if (pollingNotifications || document.hidden || !notifBadge) return;
+            pollingNotifications = true;
+
+            fetch('check_notifications.php?after_id=' + encodeURIComponent(latestNotificationId), {
+                cache: 'no-store',
+                credentials: 'same-origin'
+            })
+                .then(function (response) {
+                    if (!response.ok) throw new Error('Notification polling returned HTTP ' + response.status);
                     return response.json();
                 })
-                .then(data => {
-                    const newCount = data.unread_count;
-                    if (newCount > currentCount) {
-                        // New notification arrived
-                        notifBadge.textContent = newCount;
-                        notifBadge.style.display = 'inline-block';
-                    } else if (newCount === 0) {
-                        notifBadge.style.display = 'none';
+                .then(function (data) {
+                    if (!Number.isInteger(data.unread_count) || !Array.isArray(data.notifications)) {
+                        throw new Error('Notification polling returned an invalid response.');
                     }
-                    currentCount = newCount;
+                    notifBadge.textContent = data.unread_count;
+                    notifBadge.style.display = data.unread_count > 0 ? 'inline-block' : 'none';
+
+                    data.notifications.forEach(function (notification) {
+                        latestNotificationId = Math.max(latestNotificationId, Number(notification.id) || 0);
+                        appendNotification(notification);
+                        showNotificationToast(notification);
+                    });
+                    latestNotificationId = Math.max(latestNotificationId, Number(data.next_after_id) || 0);
+                    notificationsLink.dataset.latestNotificationId = String(latestNotificationId);
                 })
-                .catch(error => {
+                .catch(function (error) {
                     console.error('Error checking notifications:', error);
+                })
+                .finally(function () {
+                    pollingNotifications = false;
                 });
         }
 
-        // Check for new notifications every 15 seconds
-        setInterval(checkNotifications, 15000);
+        window.setInterval(checkNotifications, 10000);
     });
 </script>

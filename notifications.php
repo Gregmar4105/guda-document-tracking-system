@@ -46,7 +46,7 @@ $stmt->close();
         <div class="content-wrapper">
             <div class="card">
                 <h2>Recent Activity</h2>
-                <div class="notification-list">
+                <div class="notification-list" aria-live="polite">
                     <?php if (empty($notifications)): ?>
                         <div class="empty-state">
                             <p>You have no notifications yet.</p>

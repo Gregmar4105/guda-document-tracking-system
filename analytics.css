@@ -106,6 +106,10 @@ table tfoot td {
     display: none;
 }
 
+.print-report-header {
+    display: none;
+}
+
 .button-group { text-align: right; margin-bottom: 20px; }
 .btn-print {
     background: var(--naap-gold);
@@ -119,12 +123,124 @@ table tfoot td {
 }
 .btn-print:hover { background: #d97706; }
 
+.hr-head-analytics #artaChart {
+    cursor: pointer;
+}
+.arta-compliance-breakdown-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 14px;
+    margin-top: 12px;
+}
+.arta-compliance-breakdown-link {
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--naap-navy);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.arta-compliance-breakdown-link:hover,
+.arta-compliance-breakdown-link:focus-visible {
+    background: #eff6ff;
+    text-decoration: underline;
+}
+.arta-compliance-breakdown-hint {
+    flex-basis: 100%;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-align: center;
+}
+.arta-compliance-dialog {
+    box-sizing: border-box;
+    width: min(1000px, calc(100% - 32px));
+    max-width: 1000px;
+    max-height: min(82vh, 760px);
+    padding: 24px;
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    color: var(--text-dark);
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+}
+.arta-compliance-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.55);
+}
+.arta-compliance-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--naap-gold);
+}
+.arta-compliance-dialog-header p {
+    margin: 0 0 5px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.arta-compliance-dialog-header h2 {
+    margin: 0;
+    color: var(--naap-navy);
+    font-size: 1.3rem;
+}
+.arta-compliance-dialog-close {
+    padding: 8px 12px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text-dark);
+    font: inherit;
+    cursor: pointer;
+}
+.arta-compliance-dialog-summary {
+    margin: 16px 0;
+    color: var(--text-muted);
+}
+.arta-compliance-dialog-table-wrap {
+    overflow: auto;
+}
+.arta-compliance-dialog-table {
+    min-width: 760px;
+}
+.arta-compliance-dialog-table th,
+.arta-compliance-dialog-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-light);
+    text-align: left;
+}
+.arta-compliance-dialog-table th {
+    background: #f8fafc;
+    color: var(--naap-navy);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+.arta-compliance-dialog-table a {
+    color: var(--naap-navy);
+    font-weight: 700;
+}
+.arta-compliance-dialog-empty {
+    padding: 24px;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: var(--text-muted);
+    text-align: center;
+}
+
 @media (max-width: 768px) {
     .main-content { margin-left: 0; width: 100%; padding: 80px 20px 30px 20px; }
 }
 
 /* --- PRINT STYLES --- */
 @media print {
+    .arta-compliance-breakdown-links,
+    .arta-compliance-dialog {
+        display: none !important;
+    }
+
     .main-content {
         margin: 0 auto !important;
         width: 100% !important;
@@ -162,17 +278,6 @@ table tfoot td {
     .container .page-header h1 { font-size: 14pt; color: black !important; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 15px !important; }
     .container .page-header p { display: none; }
     
-    body.accounting-analytics::before {
-        content: 'National Aviation Academy of the Philippines';
-        display: block;
-        text-align: center;
-        font-size: 12pt;
-        font-weight: bold;
-        margin: 0 auto 20px;
-        border-bottom: 2px solid black;
-        padding-bottom: 10px;
-    }
-
     .print-only-summary {
         display: block;
         margin: 0 auto 30px;
@@ -265,56 +370,128 @@ table tfoot td {
     body.hr-head-analytics .stats-grid {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 5mm !important;
-        margin: 0 0 8mm !important;
+        gap: 4mm !important;
+        margin: 0 0 7mm !important;
         align-items: stretch;
+    }
+    body.hr-head-analytics .container {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+    }
+    body.hr-head-analytics .print-report-header {
+        display: block !important;
+        margin: 0 0 8mm !important;
+        padding: 0 0 4mm !important;
+        border-bottom: 2px solid #1e3a8a !important;
+        text-align: center;
+        break-after: avoid;
+        page-break-after: avoid;
+    }
+    body.hr-head-analytics .print-report-institution {
+        color: #111 !important;
+        font-family: Arial, sans-serif;
+        font-size: 14pt;
+        font-weight: 700;
+        letter-spacing: 0.3pt;
+    }
+    body.hr-head-analytics .print-report-office {
+        margin-top: 1mm;
+        color: #333 !important;
+        font-family: Arial, sans-serif;
+        font-size: 10pt;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5pt;
+    }
+    body.hr-head-analytics .print-report-header h1 {
+        margin: 4mm 0 3mm !important;
+        color: #1e3a8a !important;
+        font-family: Arial, sans-serif;
+        font-size: 18pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6pt;
+    }
+    body.hr-head-analytics .print-report-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 8mm;
+        padding-top: 2mm;
+        border-top: 1px solid #bbb;
+        color: #333 !important;
+        font-size: 9pt;
+        text-align: left;
     }
     body.hr-head-analytics .stat-card {
         display: flex !important;
         min-height: 0 !important;
-        padding: 5mm !important;
+        padding: 4mm !important;
         box-shadow: none !important;
-        border: 1px solid #bbb;
-        border-radius: 0;
+        border: 1px solid #aab3bf;
+        border-radius: 2mm;
         break-inside: avoid;
         page-break-inside: avoid;
     }
     body.hr-head-analytics .stat-card-header {
         display: flex !important;
-        padding-bottom: 3mm !important;
-        margin-bottom: 3mm !important;
+        padding-bottom: 2mm !important;
+        margin-bottom: 2mm !important;
+        border-bottom: 1px solid #cbd2dc !important;
+    }
+    body.hr-head-analytics .stat-card-header h3 {
+        color: #1e3a8a !important;
+        font-family: Arial, sans-serif;
+        font-size: 10pt !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.2pt;
     }
     body.hr-head-analytics .chart-container {
         display: block !important;
-        height: 58mm !important;
-        min-height: 58mm !important;
+        height: 54mm !important;
+        min-height: 54mm !important;
         break-inside: avoid;
         page-break-inside: avoid;
     }
     body.hr-head-analytics .chart-container canvas {
         max-width: 100% !important;
-        max-height: 58mm !important;
+        max-height: 54mm !important;
+    }
+    body.hr-head-analytics .stat-value {
+        color: #111 !important;
+        font-size: 24pt !important;
+    }
+    body.hr-head-analytics .stat-label {
+        color: #444 !important;
+        font-size: 9pt !important;
     }
     body.hr-head-analytics .page-header {
-        margin: 0 0 5mm !important;
-        padding-bottom: 2mm !important;
-        border-bottom: 1px solid #555 !important;
+        margin: 7mm 0 4mm !important;
+        padding: 0 0 2mm !important;
+        border-bottom: 1px solid #8b95a3 !important;
+        text-align: left !important;
         break-after: avoid;
         page-break-after: avoid;
     }
     body.hr-head-analytics .page-header h1 {
-        color: #111 !important;
-        font-size: 14pt !important;
+        color: #1e3a8a !important;
+        font-family: Arial, sans-serif;
+        font-size: 13pt !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3pt;
     }
     body.hr-head-analytics .page-header p {
         display: block !important;
-        color: #333 !important;
+        margin-top: 1mm !important;
+        color: #444 !important;
         font-size: 9pt !important;
     }
     body.hr-head-analytics .table-responsive {
         width: 100% !important;
         overflow: visible !important;
-        margin: 0 0 8mm !important;
+        margin: 0 0 7mm !important;
         padding: 0 !important;
         border: 0 !important;
         box-shadow: none !important;
@@ -340,10 +517,26 @@ table tfoot td {
         border: 1px solid #999 !important;
         color: #111 !important;
     }
+    body.hr-head-analytics .table-responsive td a {
+        color: #111 !important;
+        font-weight: 600;
+        text-decoration: none;
+    }
     body.hr-head-analytics .table-responsive th {
         background: #eee !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+    }
+    body.hr-head-analytics .status-overdue,
+    body.hr-head-analytics .status-at-risk {
+        background: #f3f4f6 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    body.hr-head-analytics .deadline-flag {
+        padding: 0 !important;
+        color: #111 !important;
+        background: transparent !important;
     }
     body.hr-head-analytics .list-card li {
         color: #111 !important;

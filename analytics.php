@@ -30,56 +30,111 @@ function resolve_routing_step($step, $conn) {
 
 // --- 1. ARTA COMPLIANCE RATE ---
 $arta_stats = ['on_time' => 0, 'at_risk' => 0, 'overdue' => 0];
-
-// Get active documents
-$active_stmt = $conn->query("
-    SELECT arta_deadline 
-    FROM vouchers 
-    WHERE status IN ('Pending Review', 'Processing', 'In Transit') AND arta_deadline IS NOT NULL
-");
-if ($active_stmt) {
-    while ($row = $active_stmt->fetch_assoc()) {
-        $deadline = new DateTime($row['arta_deadline']);
-        $today = new DateTime();
-        $today->setTime(0,0,0);
-
-        if ($today > $deadline) {
-            $arta_stats['overdue']++;
-        } else {
-            $diff = $today->diff($deadline);
-            if ($diff->days <= 2) {
-                $arta_stats['at_risk']++;
-            } else {
-                $arta_stats['on_time']++;
-            }
-        }
+$arta_compliance_documents = ['on_time' => [], 'at_risk' => [], 'overdue' => []];
+$default_arta_route = [];
+$default_route_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 AND is_active = 1 ORDER BY name ASC");
+if ($default_route_res) {
+    while ($route_row = $default_route_res->fetch_assoc()) {
+        $default_arta_route[] = $route_row['name'];
     }
-    $active_stmt->close();
+    $default_route_res->close();
 }
 
-// Get completed documents
-$completed_stmt = $conn->query("
-    SELECT v.arta_deadline, final_logs.completion_date
+$arta_documents_res = $conn->query("
+    SELECT
+        v.voucher_code,
+        v.document_title,
+        v.arta_deadline,
+        v.status,
+        v.current_stage_index,
+        v.custom_workflow,
+        COALESCE(vt.name, dt.name, 'Unknown type') AS document_type,
+        requestor.full_name AS requestor_name,
+        requestor.role AS requestor_department,
+        CASE
+            WHEN v.status IN ('Pending Review', 'Processing', 'In Transit') THEN NULL
+            ELSE (
+                SELECT final_log.created_at
+                FROM audit_logs final_log
+                WHERE final_log.voucher_code = v.voucher_code
+                  AND final_log.action_taken IN ('Accepted', 'RETURNED', 'DECLINED', 'AUTO-SKIPPED')
+                ORDER BY final_log.created_at DESC, final_log.log_id DESC
+                LIMIT 1
+            )
+        END AS completion_date,
+        CASE
+            WHEN v.status IN ('Pending Review', 'Processing', 'In Transit') THEN NULL
+            ELSE (
+                SELECT final_log.department
+                FROM audit_logs final_log
+                WHERE final_log.voucher_code = v.voucher_code
+                  AND final_log.action_taken IN ('Accepted', 'RETURNED', 'DECLINED', 'AUTO-SKIPPED')
+                ORDER BY final_log.created_at DESC, final_log.log_id DESC
+                LIMIT 1
+            )
+        END AS completion_office
     FROM vouchers v
-    JOIN (
-        SELECT voucher_code, MAX(created_at) as completion_date
-        FROM audit_logs
-        WHERE action_taken IN ('Accepted', 'RETURNED', 'DECLINED', 'AUTO-SKIPPED')
-        GROUP BY voucher_code
-    ) as final_logs ON v.voucher_code = final_logs.voucher_code
-    WHERE v.status NOT IN ('Pending Review', 'Processing', 'In Transit') AND v.arta_deadline IS NOT NULL
+    LEFT JOIN document_types dt ON v.doc_type_id = dt.id
+    LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
+    LEFT JOIN users requestor ON requestor.user_id = v.requestor_id
+    WHERE v.arta_deadline IS NOT NULL
+      AND (
+          v.status IN ('Pending Review', 'Processing', 'In Transit')
+          OR EXISTS (
+              SELECT 1
+              FROM audit_logs final_log
+              WHERE final_log.voucher_code = v.voucher_code
+                AND final_log.action_taken IN ('Accepted', 'RETURNED', 'DECLINED', 'AUTO-SKIPPED')
+          )
+      )
 ");
-if ($completed_stmt) {
-    while ($row = $completed_stmt->fetch_assoc()) {
-        $deadline = new DateTime($row['arta_deadline']);
-        $completion_date = new DateTime($row['completion_date']);
-        if ($completion_date > $deadline) {
-            $arta_stats['overdue']++;
+if (!$arta_documents_res) {
+    error_log('ARTA compliance document query failed: ' . $conn->error);
+} else {
+    $today = new DateTime('today');
+    while ($arta_doc = $arta_documents_res->fetch_assoc()) {
+        $deadline = new DateTime($arta_doc['arta_deadline']);
+        if (in_array($arta_doc['status'], ['Pending Review', 'Processing', 'In Transit'], true)) {
+            if ($today > $deadline) {
+                $compliance_status = 'overdue';
+            } elseif ($today->diff($deadline)->days <= 2) {
+                $compliance_status = 'at_risk';
+            } else {
+                $compliance_status = 'on_time';
+            }
+
+            $route = json_decode((string)($arta_doc['custom_workflow'] ?? ''), true);
+            if (!is_array($route) || empty($route)) {
+                $route = $default_arta_route;
+            }
+            $stage_index = max(0, (int)($arta_doc['current_stage_index'] ?? 1) - 1);
+            $office_step = $route[$stage_index] ?? ($arta_doc['requestor_department'] ?? 'Unknown office');
+            if ($office_step === 'Department Head') {
+                $office = ($arta_doc['requestor_department'] ?? 'Unknown office') . ' (Head)';
+            } else {
+                $office = resolve_routing_step($office_step, $conn);
+            }
         } else {
-            $arta_stats['on_time']++;
+            if (empty($arta_doc['completion_date'])) {
+                continue;
+            }
+            $completion_date = new DateTime($arta_doc['completion_date']);
+            $compliance_status = $completion_date > $deadline ? 'overdue' : 'on_time';
+            $office = $arta_doc['completion_office'] ?: 'Unknown office';
         }
+
+        $arta_stats[$compliance_status]++;
+        $arta_compliance_documents[$compliance_status][] = [
+            'office' => $office,
+            'voucher_code' => $arta_doc['voucher_code'],
+            'document_title' => $arta_doc['document_title'],
+            'document_type' => $arta_doc['document_type'],
+            'requestor_name' => $arta_doc['requestor_name'] ?: 'Unknown requestor',
+            'arta_deadline' => $arta_doc['arta_deadline'],
+            'status' => $arta_doc['status']
+        ];
     }
-    $completed_stmt->close();
+    $arta_documents_res->close();
 }
 
 // --- 2. AVERAGE DOCUMENT LIFECYCLE ---
@@ -719,6 +774,7 @@ if ($live_status_res) {
     <title>System Analytics - NAAP</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="analytics.css?v=<?php echo @filemtime('analytics.css'); ?>">
+    <link rel="stylesheet" href="print.css?v=<?php echo @filemtime('print.css'); ?>">
     <?php if ($is_hr_head): ?>
     <style>
         @media print {
@@ -766,6 +822,18 @@ if ($live_status_res) {
 
 <div class="main-content">
     <div class="container">
+        <?php if ($is_hr_head): ?>
+        <div class="print-report-header">
+            <div class="print-report-institution">National Aviation Academy of the Philippines</div>
+            <div class="print-report-office">Human Resource Management Services Division</div>
+            <h1>System Analytics Report</h1>
+            <div class="print-report-meta">
+                <span>Prepared by: <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'HR Head'); ?></span>
+                <span>Generated: <?php echo date('F j, Y g:i A'); ?></span>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="page-header">
             <h1>System Analytics</h1>
             <p>High-level overview of system performance and compliance.</p>
@@ -786,6 +854,27 @@ if ($live_status_res) {
                 <div class="chart-container">
                     <canvas id="artaChart"></canvas>
                 </div>
+                <?php if ($is_hr_head): ?>
+                    <?php
+                        $arta_total_documents = array_sum($arta_stats);
+                        $arta_labels = [
+                            'on_time' => 'On-Time',
+                            'at_risk' => 'At-Risk',
+                            'overdue' => 'Overdue'
+                        ];
+                    ?>
+                    <div class="arta-compliance-breakdown-links" aria-label="ARTA compliance breakdown">
+                        <?php foreach ($arta_labels as $status_key => $status_label): ?>
+                            <?php $status_percentage = $arta_total_documents > 0 ? ($arta_stats[$status_key] / $arta_total_documents) * 100 : 0; ?>
+                            <button type="button" class="arta-compliance-breakdown-link" data-compliance-status="<?php echo htmlspecialchars($status_key); ?>">
+                                <?php echo htmlspecialchars($status_label); ?>:
+                                <?php echo number_format($status_percentage, 1); ?>%
+                                (<?php echo number_format($arta_stats[$status_key]); ?>)
+                            </button>
+                        <?php endforeach; ?>
+                        <span class="arta-compliance-breakdown-hint">Select a percentage or chart segment to view offices and documents.</span>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <!-- Average Lifecycle Card -->
@@ -823,6 +912,35 @@ if ($live_status_res) {
             </div>
 
         </div>
+
+        <?php if ($is_hr_head): ?>
+        <dialog class="arta-compliance-dialog" id="artaComplianceDialog" aria-labelledby="artaComplianceDialogTitle">
+            <div class="arta-compliance-dialog-header">
+                <div>
+                    <p id="artaComplianceDialogOffice"></p>
+                    <h2 id="artaComplianceDialogTitle">ARTA Compliance Breakdown</h2>
+                </div>
+                <button type="button" class="arta-compliance-dialog-close" onclick="document.getElementById('artaComplianceDialog').close()">Close</button>
+            </div>
+            <p class="arta-compliance-dialog-summary" id="artaComplianceDialogSummary"></p>
+            <div class="arta-compliance-dialog-table-wrap">
+                <table class="arta-compliance-dialog-table">
+                    <thead>
+                        <tr>
+                            <th>Office</th>
+                            <th>Document ID</th>
+                            <th>Document type</th>
+                            <th>Requestor</th>
+                            <th>ARTA deadline</th>
+                            <th>Current status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="artaComplianceDialogRows"></tbody>
+                </table>
+            </div>
+            <p class="arta-compliance-dialog-empty" id="artaComplianceDialogEmpty" hidden>No documents are in this compliance category.</p>
+        </dialog>
+        <?php endif; ?>
 
         <div class="page-header" style="margin-top: 60px;">
             <h1>Late Processing DSS</h1>
@@ -1086,17 +1204,19 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- General System Analytics Charts ---
     const ctx = document.getElementById('artaChart');
     if (ctx) {
-        new Chart(ctx, {
+        const artaChartData = [
+            <?php echo (int)$arta_stats['on_time']; ?>,
+            <?php echo (int)$arta_stats['at_risk']; ?>,
+            <?php echo (int)$arta_stats['overdue']; ?>
+        ];
+        const artaChartTotal = artaChartData.reduce((total, value) => total + value, 0);
+        const artaChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['On-Time', 'At-Risk', 'Overdue'],
                 datasets: [{
                     label: 'Document Status',
-                    data: [
-                        <?php echo $arta_stats['on_time']; ?>,
-                        <?php echo $arta_stats['at_risk']; ?>,
-                        <?php echo $arta_stats['overdue']; ?>
-                    ],
+                    data: artaChartData,
                     backgroundColor: [
                         '#10b981', // On-Time (Green)
                         '#f59e0b', // At-Risk (Amber)
@@ -1112,6 +1232,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 plugins: {
                     legend: {
                         position: 'bottom',
+                        display: <?php echo $is_hr_head ? 'false' : 'true'; ?>,
                     },
                     tooltip: {
                         callbacks: {
@@ -1121,7 +1242,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                     label += ': ';
                                 }
                                 if (context.parsed !== null) {
-                                    label += context.parsed;
+                                    const percentage = artaChartTotal > 0 ? (context.parsed / artaChartTotal * 100).toFixed(1) : '0.0';
+                                    label += context.parsed + ' (' + percentage + '%) — click for breakdown';
                                 }
                                 return label;
                             }
@@ -1130,6 +1252,70 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+
+        <?php if ($is_hr_head): ?>
+        const artaComplianceDocuments = <?php echo json_encode($arta_compliance_documents, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        const artaStatusLabels = { on_time: 'On-Time', at_risk: 'At-Risk', overdue: 'Overdue' };
+        const artaComplianceDialog = document.getElementById('artaComplianceDialog');
+        const artaComplianceRows = document.getElementById('artaComplianceDialogRows');
+
+        function openArtaComplianceBreakdown(status) {
+            if (!artaComplianceDialog || !artaComplianceDocuments[status]) {
+                return;
+            }
+
+            const documents = artaComplianceDocuments[status];
+            document.getElementById('artaComplianceDialogOffice').textContent = 'Offices and documents';
+            document.getElementById('artaComplianceDialogTitle').textContent = artaStatusLabels[status] + ' ARTA Compliance';
+            document.getElementById('artaComplianceDialogSummary').textContent =
+                documents.length + ' document(s) — ' +
+                (artaChartTotal > 0 ? (documents.length / artaChartTotal * 100).toFixed(1) : '0.0') +
+                '% of documents with an ARTA deadline.';
+            artaComplianceRows.replaceChildren();
+            document.getElementById('artaComplianceDialogEmpty').hidden = documents.length > 0;
+
+            documents.forEach(function (documentData) {
+                const row = document.createElement('tr');
+                const officeCell = document.createElement('td');
+                officeCell.textContent = documentData.office;
+                row.appendChild(officeCell);
+
+                const idCell = document.createElement('td');
+                const trackingLink = document.createElement('a');
+                trackingLink.href = 'track.php?track_id=' + encodeURIComponent(documentData.voucher_code);
+                trackingLink.textContent = documentData.voucher_code;
+                idCell.appendChild(trackingLink);
+                row.appendChild(idCell);
+
+                [
+                    documentData.document_type,
+                    documentData.requestor_name,
+                    documentData.arta_deadline,
+                    documentData.status
+                ].forEach(function (value) {
+                    const cell = document.createElement('td');
+                    cell.textContent = value || 'N/A';
+                    row.appendChild(cell);
+                });
+                artaComplianceRows.appendChild(row);
+            });
+
+            artaComplianceDialog.showModal();
+        }
+
+        document.querySelectorAll('.arta-compliance-breakdown-link').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openArtaComplianceBreakdown(button.dataset.complianceStatus);
+            });
+        });
+
+        ctx.addEventListener('click', function (event) {
+            const elements = artaChart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+            if (elements.length > 0) {
+                openArtaComplianceBreakdown(['on_time', 'at_risk', 'overdue'][elements[0].index]);
+            }
+        });
+        <?php endif; ?>
     }
 });
 

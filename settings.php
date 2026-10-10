@@ -24,6 +24,14 @@ try {
     error_log('Could not ensure voucher_types.fixed_amount exists: ' . $error->getMessage());
     $error_msg = "Fixed amount settings are unavailable because the database column could not be added. Run the latest migrate.php or ask your database administrator to add voucher_types.fixed_amount.";
 }
+$document_type_approval_schema_ready = true;
+try {
+    ensureDocumentTypeApprovalColumn($conn);
+} catch (Throwable $error) {
+    $document_type_approval_schema_ready = false;
+    error_log('Could not ensure document_types.is_approved exists: ' . $error->getMessage());
+    $error_msg = "Custom document type approval is unavailable until the latest database migration is applied.";
+}
 
 // Check if an MIS admin already exists for UI controls
 $mis_exists_stmt = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'Management Information System Office'");
@@ -167,6 +175,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // C. Handle Document Type Management
+    elseif (isset($_POST['approve_doc_type'])) {
+        if (!$is_mis) {
+            $error_msg = "Only MIS administrators can approve document types.";
+        } elseif (!$document_type_approval_schema_ready) {
+            $error_msg = "Cannot approve this document type until the approval database migration is applied.";
+        } else {
+            $type_id = (int)($_POST['doc_type_id'] ?? 0);
+            $approve_stmt = $conn->prepare("UPDATE document_types SET is_approved = 1 WHERE id = ? AND is_approved = 0");
+            $approve_stmt->bind_param("i", $type_id);
+            if ($approve_stmt->execute() && $approve_stmt->affected_rows > 0) {
+                $success_msg = "Document type approved and added to the request dropdown.";
+            } else {
+                $error_msg = "The document type could not be approved or is already approved.";
+            }
+            $approve_stmt->close();
+        }
+    }
     elseif (isset($_POST['add_doc_type'])) {
         $new_name = trim($_POST['doc_type_name']);
         $new_arta = $_POST['doc_type_arta'];
@@ -976,13 +1001,19 @@ foreach ($all_departments as $key => $dept) {
                                                 <input type="checkbox" name="doc_type_ids[]" value="<?php echo $type['id']; ?>" form="bulkDeleteForm" style="width: 20px; height: 20px;">
                                                 <div class="doc-type-info">
                                                     <strong><?php echo htmlspecialchars(!empty($type['is_system_default']) && strcasecmp($type['name'], 'Financial Voucher') === 0 ? 'Disbursement Voucher' : $type['name']); ?></strong>
-                                                    <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?></small>
+                                                    <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?> | <?php echo !empty($type['is_approved']) ? 'Approved' : 'Pending admin approval'; ?></small>
                                                     <ul class="workflow-list">
                                                         <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
                                                     </ul>
                                                 </div>
                                             </div>
                                             <div class="user-actions">
+                                                <?php if ($is_mis && empty($type['is_approved'])): ?>
+                                                    <form method="POST">
+                                                        <input type="hidden" name="doc_type_id" value="<?php echo (int)$type['id']; ?>">
+                                                        <button type="submit" name="approve_doc_type" class="btn btn-small btn-gold">Approve Type</button>
+                                                    </form>
+                                                <?php endif; ?>
                                                 <button type="button" class="btn btn-small btn-edit" onclick="toggleEditView(<?php echo $type['id']; ?>)">Edit</button>
                                             </div>
                                         </div>

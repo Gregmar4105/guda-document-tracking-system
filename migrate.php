@@ -117,6 +117,10 @@ applyMigration('rename_financial_doc_type_to_disbursement_20261010', [
     "UPDATE `document_types` SET `name` = 'Disbursement Voucher' WHERE `is_system_default` = 1 AND `name` = 'Financial Voucher'"
 ], $conn);
 
+applyMigration('add_document_type_approval_20261010', [
+    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_approved` TINYINT(1) NOT NULL DEFAULT 1 AFTER `is_active`"
+], $conn);
+
 // Migration 5: Add ARTA level to financial voucher types
 applyMigration('add_arta_to_voucher_types_20240219', [
     "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `arta_level` VARCHAR(50) NOT NULL DEFAULT 'Complex' AFTER `name`"

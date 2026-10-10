@@ -15,6 +15,15 @@ include_once 'config.php';
 
 require_once 'db_connect.php';
 
+$db_error = "";
+$document_type_approval_schema_ready = true;
+try {
+    ensureDocumentTypeApprovalColumn($conn);
+} catch (Throwable $error) {
+    $document_type_approval_schema_ready = false;
+    error_log('Could not ensure document type approval column exists: ' . $error->getMessage());
+}
+
 // Fetch signatory departments for the workflow builder
 $signatory_departments = [];
 $depts_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 AND is_active = 1 ORDER BY name ASC");
@@ -48,7 +57,10 @@ $session_requestor_role = $_SESSION['role'] ?? '';
 
 // Fetch document types for the dropdown
 $document_types = [];
-$types_res = $conn->query("SELECT id, name, is_system_default, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 ORDER BY name ASC");
+$types_query = $document_type_approval_schema_ready
+    ? "SELECT id, name, is_system_default, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 AND is_approved = 1 ORDER BY name ASC"
+    : "SELECT id, name, is_system_default, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 ORDER BY name ASC";
+$types_res = $conn->query($types_query);
 while ($type_row = $types_res->fetch_assoc()) {
     $document_types[] = $type_row;
 }
@@ -85,8 +97,6 @@ $custom_workflow_arr = [];
 $tracking_url = "";
 $arta_deadline = null; // Initialize ARTA deadline
 $workflow_type = "Approval"; // Default
-$db_error = "";
-
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Database auto-patching is now handled globally in db_connect.php
     // 2. FETCH USER_ID
@@ -131,6 +141,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $doc_title = "Disbursement Voucher";
     }
 
+    if ($doc_type_id === 'custom' && !$document_type_approval_schema_ready) {
+        $db_error = "Custom document types are unavailable until the document type approval database migration is applied.";
+    }
+
     // --- NEW: LEARNING MECHANISM FOR DOCUMENT TYPES ---
     if ($doc_type_id === 'custom' && empty($db_error)) {
         $new_doc_type_name = trim($_POST['new_doc_type_name'] ?? '');
@@ -162,7 +176,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $new_doc_requirements_json = json_encode($new_doc_requirements_array);
                 
                 // Updated INSERT to include the new requirements JSON
-                $insert_type_stmt = $conn->prepare("INSERT INTO document_types (name, requirements, arta_level, default_workflow, created_by_user_id, is_active, workflow_type) VALUES (?, ?, ?, ?, ?, 1, ?)");
+                $insert_type_stmt = $conn->prepare("INSERT INTO document_types (name, requirements, arta_level, default_workflow, created_by_user_id, is_active, workflow_type, is_approved) VALUES (?, ?, ?, ?, ?, 1, ?, 0)");
                 $insert_type_stmt->bind_param("ssssis", $new_doc_type_name, $new_doc_requirements_json, $arta_level_for_new_type, $custom_workflow_for_new_type, $requestor_id, $workflow_type);
                 if ($insert_type_stmt->execute()) {
                     $doc_type_id = $conn->insert_id; // Get the ID of the newly created type
@@ -174,7 +188,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             $check_type_stmt->close();
         }
-    } else if ($doc_type_id !== null) {
+    } else if ($doc_type_id !== null && $doc_type_id !== 'custom') {
         // Fetch ARTA level for existing document type
         $arta_level_stmt = $conn->prepare("SELECT arta_level FROM document_types WHERE id = ?");
         $arta_level_stmt->bind_param("i", $doc_type_id);
@@ -464,6 +478,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <div class="input-group" id="new_doc_type_wrapper" style="display: none;">
                 <label>New Document Type Name</label>
+                <small style="display:block; color:var(--text-muted); margin-bottom:8px;">This document can be submitted and routed immediately. The new type will appear for future requests after MIS approval.</small>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" name="new_doc_type_name" id="new_doc_type_name" placeholder="e.g., Special Project Proposal" style="flex: 2;">
                     <select name="new_doc_type_arta" style="flex: 1;" required><?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level); ?>"><?php echo htmlspecialchars($level); ?></option><?php endforeach; ?></select> 

@@ -20,6 +20,14 @@ if ($id_result->num_rows > 0) {
 }
 $id_stmt->close();
 
+$document_type_approval_schema_ready = true;
+try {
+    ensureDocumentTypeApprovalColumn($conn);
+} catch (Throwable $error) {
+    $document_type_approval_schema_ready = false;
+    error_log('Could not ensure document type approval column exists: ' . $error->getMessage());
+}
+
 // Fetch signatory departments for the workflow builder
 $signatory_departments = [];
 $depts_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 AND is_active = 1 ORDER BY name ASC");
@@ -29,7 +37,10 @@ while ($dept_row = $depts_res->fetch_assoc()) {
 
 // Fetch document types for the dropdown
 $document_types = [];
-$types_res = $conn->query("SELECT id, name, is_system_default FROM document_types WHERE is_active = 1 ORDER BY name ASC");
+$types_query = $document_type_approval_schema_ready
+    ? "SELECT id, name, is_system_default FROM document_types WHERE is_active = 1 AND is_approved = 1 ORDER BY name ASC"
+    : "SELECT id, name, is_system_default FROM document_types WHERE is_active = 1 ORDER BY name ASC";
+$types_res = $conn->query($types_query);
 while ($type_row = $types_res->fetch_assoc()) { // Add arta_level to this fetch
     $document_types[] = $type_row;
 }
@@ -315,6 +326,15 @@ if (strpos($return_remarks, '--- MISSING/INCOMPLETE REQUIREMENTS ---') !== false
     }
 }
 
+$pending_document_type_name = null;
+if ($document_type_approval_schema_ready && !empty($doc_type_id) && !in_array($doc_type_id, array_column($document_types, 'id'))) {
+    $pending_type_stmt = $conn->prepare("SELECT name FROM document_types WHERE id = ? AND is_approved = 0");
+    $pending_type_stmt->bind_param("i", $doc_type_id);
+    $pending_type_stmt->execute();
+    $pending_document_type_name = $pending_type_stmt->get_result()->fetch_assoc()['name'] ?? null;
+    $pending_type_stmt->close();
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -415,6 +435,9 @@ if (strpos($return_remarks, '--- MISSING/INCOMPLETE REQUIREMENTS ---') !== false
                             <?php echo htmlspecialchars($type['is_system_default'] ? 'Disbursement Voucher' : $type['name']); ?>
                         </option>
                     <?php endforeach; ?>
+                    <?php if ($pending_document_type_name !== null): ?>
+                        <option value="<?php echo (int)$doc_type_id; ?>" selected><?php echo htmlspecialchars($pending_document_type_name); ?> (Pending MIS approval)</option>
+                    <?php endif; ?>
                 </select>
                 <input type="hidden" name="doc_type_id" value="<?php echo htmlspecialchars($doc_type_id); ?>">
             </div>

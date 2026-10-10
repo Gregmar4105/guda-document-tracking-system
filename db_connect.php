@@ -17,6 +17,18 @@ if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_
 // Set character set to utf8mb4 to support a wider range of characters and prevent encoding issues.
 $conn->set_charset("utf8mb4");
 
+function ensureDocumentTypeApprovalColumn($conn) {
+    $result = $conn->query("SHOW COLUMNS FROM `document_types` LIKE 'is_approved'");
+    if (!$result) {
+        throw new RuntimeException('Could not check document type approval schema: ' . $conn->error);
+    }
+    if ($result->num_rows === 0) {
+        if (!$conn->query("ALTER TABLE `document_types` ADD COLUMN `is_approved` TINYINT(1) NOT NULL DEFAULT 1 AFTER `is_active`")) {
+            throw new RuntimeException('Could not add document type approval column: ' . $conn->error);
+        }
+    }
+}
+
 /**
  * Calculates the ARTA deadline for a document, considering weekends and holidays.
  *

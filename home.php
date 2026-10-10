@@ -35,6 +35,26 @@ if ($is_head) {
 // Also normalize dashes for consistency in comparisons
 $base_dept_role = str_replace(['–', '—'], '-', $base_dept_role);
 
+function format_calendar_route_step($step, $requestor_role, $account_details) {
+    if (!is_string($step)) {
+        return 'Not specified';
+    }
+
+    if (preg_match('/^ACCOUNT:(\d+)$/i', $step, $matches)) {
+        $user_id = (int)$matches[1];
+        if (isset($account_details[$user_id])) {
+            return 'Account: ' . $account_details[$user_id]['full_name'] . ' (' . $account_details[$user_id]['role'] . ')';
+        }
+        return 'Account #' . $user_id;
+    }
+
+    if ($step === 'Department Head') {
+        return $requestor_role !== '' ? $requestor_role . ' (Head)' : 'Department Head';
+    }
+
+    return $step;
+}
+
 // --- NEW CALENDAR HELPER FUNCTION ---
 function build_calendar($month, $year, $highlights = []) {
     $daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -84,10 +104,13 @@ function build_calendar($month, $year, $highlights = []) {
                         ? htmlspecialchars(date('M d, Y', strtotime($doc['arta_deadline'])))
                         : 'N/A';
                     $requestor_name_html = htmlspecialchars($doc['requestor_name'] ?? 'Unknown requestor');
+                    $route_count_html = (int)($doc['routing_sequence_count'] ?? 0);
+                    $next_office_html = htmlspecialchars($doc['next_office'] ?? 'Not specified');
                     $track_url = 'track.php?track_id=' . urlencode($doc['voucher_code']);
 
-                    $tooltip .= "<div class='calendar-tooltip-document'><a href='{$track_url}'><strong>{$voucher_code_html}</strong></a><br><small>{$document_title_html}</small><br><small>ARTA deadline: {$deadline_html}</small><br><small>Requestor: {$requestor_name_html}</small></div>";
+                    $tooltip .= "<div class='calendar-tooltip-document'><a href='{$track_url}'><strong>{$voucher_code_html}</strong></a><br><small>{$document_title_html}</small><br><small>ARTA deadline: {$deadline_html}</small><br><small>Requestor: {$requestor_name_html}</small><br><small>Routing steps: {$route_count_html}</small><br><small>Next office: {$next_office_html}</small></div>";
                 }
+
                 $tooltip .= "</div>";
 
                 $cell_content .= $tooltip;
@@ -112,6 +135,17 @@ $signatory_roles = [];
 $seq_res = $conn->query("SELECT name FROM departments WHERE is_signatory = 1 AND is_active = 1 ORDER BY name ASC");
 while ($row = $seq_res->fetch_assoc()) {
     $signatory_roles[] = $row['name'];
+}
+$calendar_account_details = [];
+$calendar_accounts_res = $conn->query("SELECT user_id, full_name, role FROM users");
+if ($calendar_accounts_res) {
+    while ($account_row = $calendar_accounts_res->fetch_assoc()) {
+        $calendar_account_details[(int)$account_row['user_id']] = [
+            'full_name' => $account_row['full_name'],
+            'role' => $account_row['role']
+        ];
+    }
+    $calendar_accounts_res->close();
 }
 
 $total_submitted_by_me = 0;
@@ -434,7 +468,8 @@ if ($is_signatory) {
 
     // Base SQL for all signatories
     $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days,
-                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type, u_req.full_name AS requestor_name
+                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type, u_req.full_name AS requestor_name,
+                    u_req.role AS requestor_role, v.custom_workflow, v.current_stage_index
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
@@ -506,7 +541,8 @@ if ($is_signatory) {
 } else {
     // Requestors see the deadlines for their own submitted documents.
     $sql = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days,
-                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type, u_req.full_name AS requestor_name
+                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type, u_req.full_name AS requestor_name,
+                    u_req.role AS requestor_role, v.custom_workflow, v.current_stage_index
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
@@ -523,6 +559,20 @@ $deadline_stmt->execute();
 $deadline_res = $deadline_stmt->get_result();
 $documents_for_calendar = $deadline_res->fetch_all(MYSQLI_ASSOC);
 $deadline_stmt->close();
+
+foreach ($documents_for_calendar as &$calendar_doc) {
+    $route = json_decode((string)($calendar_doc['custom_workflow'] ?? ''), true);
+    if (!is_array($route) || empty($route)) {
+        $route = $signatory_roles;
+    }
+    $current_route_index = max(0, (int)($calendar_doc['current_stage_index'] ?? 1) - 1);
+    $next_route_step = $route[$current_route_index + 1] ?? null;
+    $calendar_doc['routing_sequence_count'] = count($route);
+    $calendar_doc['next_office'] = $next_route_step !== null
+        ? format_calendar_route_step($next_route_step, (string)($calendar_doc['requestor_role'] ?? ''), $calendar_account_details)
+        : 'None (final step)';
+}
+unset($calendar_doc);
 
 $deadline_scope_count = count($documents_for_calendar);
 $overdue_documents = [];

@@ -196,6 +196,7 @@ body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-gray); ma
     display: inline-block;
     margin-top: 2px;
     line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 .calendar-table td:hover .tooltip { display: block; }
 

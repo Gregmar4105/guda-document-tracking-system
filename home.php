@@ -80,9 +80,13 @@ function build_calendar($month, $year, $highlights = []) {
                 foreach ($highlights[$currentDateStr]['documents'] as $doc) {
                     $voucher_code_html = htmlspecialchars($doc['voucher_code']);
                     $document_title_html = htmlspecialchars($doc['document_title']);
-                    $track_url = 'track.php?code=' . urlencode($doc['voucher_code']);
+                    $deadline_html = !empty($doc['arta_deadline'])
+                        ? htmlspecialchars(date('M d, Y', strtotime($doc['arta_deadline'])))
+                        : 'N/A';
+                    $requestor_name_html = htmlspecialchars($doc['requestor_name'] ?? 'Unknown requestor');
+                    $track_url = 'track.php?track_id=' . urlencode($doc['voucher_code']);
 
-                    $tooltip .= "<div><a href='{$track_url}' target='_blank'><strong>{$voucher_code_html}</strong></a><br><small>{$document_title_html}</small></div>";
+                    $tooltip .= "<div class='calendar-tooltip-document'><a href='{$track_url}'><strong>{$voucher_code_html}</strong></a><br><small>{$document_title_html}</small><br><small>ARTA deadline: {$deadline_html}</small><br><small>Requestor: {$requestor_name_html}</small></div>";
                 }
                 $tooltip .= "</div>";
 
@@ -430,7 +434,7 @@ if ($is_signatory) {
 
     // Base SQL for all signatories
     $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days,
-                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type
+                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type, u_req.full_name AS requestor_name
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
@@ -502,11 +506,12 @@ if ($is_signatory) {
 } else {
     // Requestors see the deadlines for their own submitted documents.
     $sql = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days,
-                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type
+                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type, u_req.full_name AS requestor_name
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
             LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
+            LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.requestor_id = ? 
             AND v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL";

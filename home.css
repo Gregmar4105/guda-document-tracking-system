@@ -185,6 +185,18 @@ body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-gray); ma
 .tooltip div { padding: 5px 0; border-bottom: 1px solid #555; }
 .tooltip div:last-child { border-bottom: none; }
 .tooltip small { color: #ccc; }
+.tooltip .calendar-tooltip-document a {
+    display: inline-block;
+    margin-bottom: 3px;
+    color: var(--naap-gold);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.tooltip .calendar-tooltip-document small {
+    display: inline-block;
+    margin-top: 2px;
+    line-height: 1.35;
+}
 .calendar-table td:hover .tooltip { display: block; }
 
 /* Style for links inside the tooltip */

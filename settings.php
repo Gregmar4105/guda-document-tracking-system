@@ -584,6 +584,17 @@ $users_res = $conn->query("SELECT * FROM users ORDER BY role, full_name");
 while($user_row = $users_res->fetch_assoc()) {
     $all_users[] = $user_row;
 }
+$account_names_by_id = [];
+foreach ($all_users as $user_row) {
+    $account_names_by_id[(int)$user_row['user_id']] = $user_row['full_name'] . ' (' . $user_row['username'] . ')';
+}
+$format_workflow_step = static function ($step) use ($account_names_by_id) {
+    if (is_string($step) && strpos($step, 'ACCOUNT:') === 0) {
+        $account_id = (int)substr($step, strlen('ACCOUNT:'));
+        return $account_names_by_id[$account_id] ?? ('Unknown account #' . $account_id);
+    }
+    return (string)$step;
+};
 
 // Fetch all document types for management
 $all_doc_types = [];
@@ -1003,7 +1014,7 @@ foreach ($all_departments as $key => $dept) {
                                                     <strong><?php echo htmlspecialchars(!empty($type['is_system_default']) && strcasecmp($type['name'], 'Financial Voucher') === 0 ? 'Disbursement Voucher' : $type['name']); ?></strong>
                                                     <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?> | <?php echo !empty($type['is_approved']) ? 'Approved' : 'Pending admin approval'; ?></small>
                                                     <ul class="workflow-list">
-                                                        <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
+                                                        <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($format_workflow_step($step)); ?></li><?php endforeach; ?>
                                                     </ul>
                                                 </div>
                                             </div>
@@ -1132,7 +1143,7 @@ foreach ($all_departments as $key => $dept) {
                                             <strong><?php echo htmlspecialchars($v_type['name']); ?></strong>
                                             <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items<?php if (($v_type['fixed_amount'] ?? null) !== null): ?> | Fixed amount: PHP <?php echo number_format((float)$v_type['fixed_amount'], 2); ?><?php endif; ?></small>
                                             <ul class="workflow-list">
-                                                <?php foreach($v_workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
+                                                <?php foreach($v_workflow as $step): ?><li><?php echo htmlspecialchars($format_workflow_step($step)); ?></li><?php endforeach; ?>
                                             </ul>
                                         </div>
                                     </div>

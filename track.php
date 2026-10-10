@@ -428,6 +428,7 @@ if ($num_stages > 1) {
     <title>NAAP - Track & Print Voucher</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="track.css?v=<?php echo filemtime('track.css'); ?>">
+    <link rel="stylesheet" href="print.css?v=<?php echo @filemtime('print.css'); ?>">
     <style>
         .admin-actions-card {
             background-color: #fffbeb;
@@ -465,10 +466,14 @@ if ($num_stages > 1) {
 <?php include('sidebar.php'); ?>
 
 <div class="main-content">
-    <div id="print-header" class="print-header">
-        <h1>NATIONAL AVIATION ACADEMY OF THE PHILIPPINES</h1>
+    <div id="print-header" class="print-header print-report-header">
+        <div class="print-report-institution">National Aviation Academy of the Philippines</div>
+        <div class="print-report-office">Document Tracking System</div>
         <h2 id="print-title"></h2>
         <p id="print-subtitle"></p>
+        <div class="print-report-meta">
+            <span>Generated: <?php echo date('F j, Y g:i A'); ?></span>
+        </div>
     </div>
 
     <div class="page-header">
@@ -600,6 +605,9 @@ if ($num_stages > 1) {
         </div>
         <?php endif; ?>
 
+        <p id="tracking-live-status" role="status" aria-live="polite" style="margin: 18px 0 -12px; color: var(--text-muted); font-size: 0.85rem;">
+            Routing progress updates automatically while this page is open.
+        </p>
         <div class="tracker-container">
             <div class="stepper-wrapper">
                 <div class="stepper-line-bg" style="left: <?php echo $line_margin_percent; ?>%; right: <?php echo $line_margin_percent; ?>%;">
@@ -750,6 +758,53 @@ if ($num_stages > 1) {
         window.print();
         setTimeout(() => document.body.classList.remove('print-history-only'), 500);
     }
+
+    (function enableLiveTracking() {
+        const currentTracker = document.querySelector('.tracker-container');
+        const currentLogBody = document.querySelector('.log-table tbody');
+        const liveStatus = document.getElementById('tracking-live-status');
+        let updateInProgress = false;
+
+        if (!currentTracker || !currentLogBody) return;
+
+        async function refreshTracking() {
+            if (updateInProgress || document.hidden) return;
+            updateInProgress = true;
+
+            try {
+                const refreshUrl = new URL(window.location.href);
+                refreshUrl.searchParams.set('_live_refresh', Date.now().toString());
+                const response = await fetch(refreshUrl.toString(), {
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!response.ok) throw new Error('Tracking refresh returned HTTP ' + response.status);
+
+                const refreshedPage = new DOMParser().parseFromString(await response.text(), 'text/html');
+                const refreshedTracker = refreshedPage.querySelector('.tracker-container');
+                const refreshedLogBody = refreshedPage.querySelector('.log-table tbody');
+                if (!refreshedTracker || !refreshedLogBody) return;
+
+                const routingChanged = currentTracker.innerHTML !== refreshedTracker.innerHTML;
+                const historyChanged = currentLogBody.innerHTML !== refreshedLogBody.innerHTML;
+                if (routingChanged) currentTracker.innerHTML = refreshedTracker.innerHTML;
+                if (historyChanged) currentLogBody.innerHTML = refreshedLogBody.innerHTML;
+                if (routingChanged && liveStatus) {
+                    liveStatus.textContent = 'Routing sequence updated just now.';
+                }
+            } catch (error) {
+                console.error('Unable to refresh document tracking:', error);
+            } finally {
+                updateInProgress = false;
+            }
+        }
+
+        window.setInterval(refreshTracking, 5000);
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) refreshTracking();
+        });
+    })();
 </script>
 
 <?php

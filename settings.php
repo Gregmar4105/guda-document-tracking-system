@@ -13,6 +13,17 @@ require_once 'db_connect.php';
 require_once __DIR__ . '/GoogleAuthenticator.php';
 $success_msg = "";
 $error_msg = "";
+$fixed_amount_schema_ready = true;
+try {
+    $fixed_amount_column = $conn->query("SHOW COLUMNS FROM `voucher_types` LIKE 'fixed_amount'");
+    if ($fixed_amount_column->num_rows === 0) {
+        $conn->query("ALTER TABLE `voucher_types` ADD COLUMN `fixed_amount` DECIMAL(15, 2) NULL DEFAULT NULL AFTER `max_amount`");
+    }
+} catch (Throwable $error) {
+    $fixed_amount_schema_ready = false;
+    error_log('Could not ensure voucher_types.fixed_amount exists: ' . $error->getMessage());
+    $error_msg = "Fixed amount settings are unavailable because the database column could not be added. Run the latest migrate.php or ask your database administrator to add voucher_types.fixed_amount.";
+}
 
 // Check if an MIS admin already exists for UI controls
 $mis_exists_stmt = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'Management Information System Office'");
@@ -217,6 +228,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // D. Handle Financial Voucher Type Management
     elseif (isset($_POST['add_voucher_type'])) {
+        if (!$fixed_amount_schema_ready) {
+            $error_msg = "Cannot save this voucher type until the fixed amount database migration is applied.";
+        } else {
         $name = trim($_POST['voucher_type_name']);
         $req_text = trim($_POST['requirements']);
         $req_array = !empty($req_text) ? array_map('trim', preg_split('/\r\n|\r|\n/', $req_text)) : [];
@@ -238,8 +252,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $error_msg = "Error creating voucher type: " . $conn->error;
         }
         }
+        }
     }
     elseif (isset($_POST['update_voucher_type'])) {
+        if (!$fixed_amount_schema_ready) {
+            $error_msg = "Cannot save this voucher type until the fixed amount database migration is applied.";
+        } else {
         $id = $_POST['voucher_type_id'];
         $name = trim($_POST['voucher_type_name']);
         $req_text = trim($_POST['requirements']);
@@ -261,6 +279,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             $error_msg = "Error updating voucher type: " . $conn->error;
         }
+            }
         }
     }
     elseif (isset($_POST['delete_bulk_voucher_types'])) {

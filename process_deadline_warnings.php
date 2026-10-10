@@ -88,7 +88,7 @@ foreach ($at_risk_docs as $doc) {
             $days_left = (new DateTime())->diff(new DateTime($doc['arta_deadline']))->days;
             $deadline_date_formatted = date('F d, Y', strtotime($doc['arta_deadline']));
             
-            $notif_message = "URGENT: Document {$voucher_code} ('" . htmlspecialchars($doc['document_title']) . "') is due on {$deadline_date_formatted} ({$days_left} day/s left). Please process immediately.";
+            $notif_message = "URGENT: Document {$voucher_code} ('" . htmlspecialchars(display_document_title($doc['document_title'])) . "') is due on {$deadline_date_formatted} ({$days_left} day/s left). Please process immediately.";
             $notif_link = "queue.php?select_id=" . urlencode($voucher_code);
 
             while ($user_row = $users_res->fetch_assoc()) {
@@ -157,7 +157,7 @@ foreach ($overdue_docs as $doc) {
     $log_stmt->close();
 
     // 3. Send escalation notifications
-    $notif_message = "ALERT: Document {$voucher_code} ('" . htmlspecialchars($doc['document_title']) . "') has LAPSED its ARTA deadline in the {$delinquent_dept} queue.";
+    $notif_message = "ALERT: Document {$voucher_code} ('" . htmlspecialchars(display_document_title($doc['document_title'])) . "') has LAPSED its ARTA deadline in the {$delinquent_dept} queue.";
     $notif_link = "track.php?track_id=" . urlencode($voucher_code);
 
     // Notify MIS Admin

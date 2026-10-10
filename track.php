@@ -191,7 +191,7 @@ $dropdown_stmt->execute();
 $dropdown_res = $dropdown_stmt->get_result();
 
 while($row = $dropdown_res->fetch_assoc()) {
-    $my_vouchers_list[$row['voucher_code']] = $row['document_title'] . " (" . $row['status'] . ")";
+    $my_vouchers_list[$row['voucher_code']] = display_document_title($row['document_title']) . " (" . $row['status'] . ")";
 }
 $dropdown_stmt->close();
 
@@ -245,7 +245,7 @@ if (!empty($selected_id)) {
             }
             
             $v_data['ID'] = $row['voucher_code']; // This is the tracking ID
-            $v_data['Document_Title'] = $row['document_title']; 
+            $v_data['Document_Title'] = display_document_title($row['document_title']);
             $v_data['Date_Submitted'] = $row['date_submitted'];
             $v_data['Status'] = $row['status'];
             $v_data['Current_Stage_Index'] = (int)$row['current_stage_index'];

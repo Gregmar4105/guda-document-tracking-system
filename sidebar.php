@@ -138,7 +138,7 @@ $dot_color = '#10b981';
             <a href="analytics.php" class="<?php echo ($current_page == 'analytics.php') ? 'active' : ''; ?>">System Analytics</a>
         <?php endif; ?>
         <?php if ($is_acct_head): ?>
-            <a href="analytics_accounting.php" class="<?php echo ($current_page == 'analytics_accounting.php') ? 'active' : ''; ?>">Financial Analytics</a>
+            <a href="analytics_accounting.php" class="<?php echo ($current_page == 'analytics_accounting.php') ? 'active' : ''; ?>">Disbursement Voucher Analytics</a>
         <?php endif; ?>
     <?php endif; ?>
 

@@ -48,6 +48,7 @@ try {
     while ($row = $result->fetch_assoc()) {
         $row['id'] = (int)$row['id'];
         $row['is_read'] = (bool)$row['is_read'];
+        $row['message'] = str_ireplace('Financial Voucher', 'Disbursement Voucher', $row['message']);
         $notifications[] = $row;
     }
     $notifications_stmt->close();

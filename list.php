@@ -223,7 +223,7 @@ $stmt->close();
 <tr class="<?php echo $row_class; ?>">
 <td><?php echo $v['voucher_code']; ?></td>
 <td>
-    <?php echo htmlspecialchars($v['document_title']); ?>
+    <?php echo htmlspecialchars(display_document_title($v['document_title'])); ?>
     <?php if ($deadline_text): ?>
         <span class="deadline-flag"><?php echo $deadline_text; ?></span>
     <?php endif; ?>

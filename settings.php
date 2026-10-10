@@ -227,7 +227,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt = $conn->prepare("INSERT INTO voucher_types (name, arta_level, requirements, default_workflow) VALUES (?, ?, ?, ?)");
         $stmt->bind_param("ssss", $name, $arta_level, $req_json, $workflow_json);
         if ($stmt->execute()) {
-            $success_msg = "Financial Voucher Type '$name' created successfully.";
+            $success_msg = "Disbursement Voucher Type '$name' created successfully.";
         } else {
             $error_msg = "Error creating voucher type: " . $conn->error;
         }
@@ -244,7 +244,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt = $conn->prepare("UPDATE voucher_types SET name = ?, arta_level = ?, requirements = ?, default_workflow = ? WHERE id = ?");
         $stmt->bind_param("ssssi", $name, $arta_level, $req_json, $workflow_json, $id);
         if ($stmt->execute()) {
-            $success_msg = "Financial Voucher Type '$name' updated successfully.";
+            $success_msg = "Disbursement Voucher Type '$name' updated successfully.";
         } else {
             $error_msg = "Error updating voucher type: " . $conn->error;
         }
@@ -257,9 +257,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $delete_stmt = $conn->prepare("DELETE FROM voucher_types WHERE id IN ($placeholders)");
             $delete_stmt->bind_param($types, ...$ids_to_delete);
             if ($delete_stmt->execute()) {
-                $success_msg = count($ids_to_delete) . " financial voucher type(s) deleted successfully.";
+                $success_msg = count($ids_to_delete) . " disbursement voucher type(s) deleted successfully.";
             } else {
-                $error_msg = "Error deleting financial voucher types: " . $conn->error;
+                $error_msg = "Error deleting disbursement voucher types: " . $conn->error;
             }
             $delete_stmt->close();
         }
@@ -269,7 +269,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt = $conn->prepare("DELETE FROM voucher_types WHERE id = ?");
         $stmt->bind_param("i", $id);
         if ($stmt->execute()) {
-            $success_msg = "Financial Voucher Type deleted successfully.";
+            $success_msg = "Disbursement Voucher Type deleted successfully.";
         } else {
             $error_msg = "Error deleting voucher type: " . $conn->error;
         }
@@ -377,10 +377,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt_max->close();
 
             $conn->commit();
-            $success_msg = "General financial guidelines updated successfully.";
+            $success_msg = "Disbursement voucher guidelines updated successfully.";
         } catch (Exception $e) {
             $conn->rollback();
-            $error_msg = "Error updating financial guidelines: " . $e->getMessage();
+            $error_msg = "Error updating disbursement voucher guidelines: " . $e->getMessage();
         }
     }
     // I. Handle ARTA Level Management
@@ -644,7 +644,7 @@ foreach ($all_departments as $key => $dept) {
         <div class="page-header">
             <h1>System Administration</h1>
             <p>Institutional configuration, user management, and workflow protocols.</p>
-            <?php if ($is_acct_head && !$is_mis): ?><p style="color: var(--naap-gold); font-weight: bold;">Limited view: Managing Financial Voucher Types only.</p><?php endif; ?>
+            <?php if ($is_acct_head && !$is_mis): ?><p style="color: var(--naap-gold); font-weight: bold;">Limited view: Managing Disbursement Voucher Types only.</p><?php endif; ?>
         </div>
 
         <?php if($success_msg): ?> <div class="alert alert-success"><?php echo $success_msg; ?></div> <?php endif; ?>
@@ -652,10 +652,10 @@ foreach ($all_departments as $key => $dept) {
 
         <?php if ($is_mis || $is_acct_head): // This is visible to both MIS and Acct Head ?>
         <div class="settings-section">
-            <h2 class="section-heading">Financial Guidelines</h2>
+            <h2 class="section-heading">Disbursement Voucher Guidelines</h2>
             <div class="card">
-                <h3 class="card-title">General Voucher Amount Guidelines</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Set system-wide minimum and maximum amount thresholds. Vouchers outside these guidelines will be flagged by the Decision Support System (DSS) for review.</p>
+                <h3 class="card-title">Disbursement Voucher Amount Guidelines</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Set system-wide minimum and maximum amount thresholds. Disbursement vouchers outside these guidelines will be flagged by the Decision Support System (DSS) for review.</p>
                 <form method="POST">
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="input-group">
@@ -873,7 +873,7 @@ foreach ($all_departments as $key => $dept) {
             <?php if ($is_mis): ?>
                 <h2 class="section-heading">Workflow & Template Management</h2>
             <?php elseif ($is_acct_head): ?>
-                <h2 class="section-heading">Financial Template Management</h2>
+                <h2 class="section-heading">Disbursement Voucher Template Management</h2>
             <?php endif; ?>
             <div class="settings-grid">
                 <?php if ($is_mis): ?>
@@ -942,7 +942,7 @@ foreach ($all_departments as $key => $dept) {
                                             <div style="display: flex; align-items: center; gap: 15px;">
                                                 <input type="checkbox" name="doc_type_ids[]" value="<?php echo $type['id']; ?>" form="bulkDeleteForm" style="width: 20px; height: 20px;">
                                                 <div class="doc-type-info">
-                                                    <strong><?php echo htmlspecialchars($type['name']); ?></strong>
+                                                    <strong><?php echo htmlspecialchars(!empty($type['is_system_default']) && strcasecmp($type['name'], 'Financial Voucher') === 0 ? 'Disbursement Voucher' : $type['name']); ?></strong>
                                                     <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?></small>
                                                     <ul class="workflow-list">
                                                         <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
@@ -957,7 +957,7 @@ foreach ($all_departments as $key => $dept) {
                                             <form method="POST">
                                                 <input type="hidden" name="doc_type_id" value="<?php echo $type['id']; ?>">
                                                 <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
-                                                    <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars($type['name']); ?>" required>
+                                                    <input type="text" name="doc_type_name" value="<?php echo htmlspecialchars(!empty($type['is_system_default']) && strcasecmp($type['name'], 'Financial Voucher') === 0 ? 'Disbursement Voucher' : $type['name']); ?>" required>
                                                                 <select name="doc_type_arta" required>
                                                                     <?php foreach($all_arta_levels as $level): ?><option value="<?php echo htmlspecialchars($level['level_name']); ?>" <?php if($type['arta_level'] == $level['level_name']) echo 'selected'; ?>><?php echo htmlspecialchars($level['level_name']); ?></option><?php endforeach; ?>
                                                                 </select> 
@@ -1003,12 +1003,12 @@ foreach ($all_departments as $key => $dept) {
                     <?php endif; ?>
 
                 <div class="card"> 
-                    <h3 class="card-title">Financial Voucher Types & Requirements</h3>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Define types for financial transactions and their required attachments. These appear when a user creates a financial request.</p>
+                    <h3 class="card-title">Disbursement Voucher Types & Requirements</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Define disbursement voucher types and their required attachments.</p>
                     <div class="card-body">
 
                         <div class="doc-type-item" style="background: #fffbeb; border-color: #fde68a;">
-                            <h4 style="margin-top:0; color: #92400e;">Add New Financial Type</h4>
+                            <h4 style="margin-top:0; color: #92400e;">Add New Disbursement Voucher Type</h4>
                             <form method="POST">
                                 <div class="input-group">
                                     <label>Voucher Type Name</label>
@@ -1040,17 +1040,17 @@ foreach ($all_departments as $key => $dept) {
                                         <input type="hidden" name="voucher_type_workflow" class="workflowInput" value="[]">
                                     </div>
                                 </div>
-                                <button type="submit" name="add_voucher_type" class="btn btn-small btn-gold">Save New Financial Type</button>
+                                <button type="submit" name="add_voucher_type" class="btn btn-small btn-gold">Save New Disbursement Voucher Type</button>
                             </form>
                         </div>
 
-                        <form method="POST" id="bulkDeleteVoucherTypeForm" onsubmit="return confirm('Are you sure you want to delete the selected financial voucher types?');">
+                        <form method="POST" id="bulkDeleteVoucherTypeForm" onsubmit="return confirm('Are you sure you want to delete the selected disbursement voucher types?');">
                             <input type="hidden" name="delete_bulk_voucher_types" value="1">
                         </form>
                         <h4 style="margin-top: 30px; display: flex; align-items: center; gap: 10px;">
                             <input type="checkbox" id="selectAllVoucherTypes" style="width: 20px; height: 20px;">
                             <label for="selectAllVoucherTypes" style="margin-bottom: 0; font-size: 1.1rem; color: var(--text-dark); cursor: pointer;">Select All</label>
-                            Existing Financial Types
+                            Existing Disbursement Voucher Types
                         </h4>
                         <?php foreach($all_voucher_types as $v_type): 
                             $v_workflow = json_decode($v_type['default_workflow'] ?? '[]', true);
@@ -1117,7 +1117,7 @@ foreach ($all_departments as $key => $dept) {
                             </div>
                         <?php endforeach; ?>
                         <?php if (empty($all_voucher_types)): ?>
-                            <p style="text-align: center; color: var(--text-muted); padding: 20px; background: #f8fafc; border-radius: 6px;">No financial voucher types have been created yet.</p>
+                            <p style="text-align: center; color: var(--text-muted); padding: 20px; background: #f8fafc; border-radius: 6px;">No disbursement voucher types have been created yet.</p>
                         <?php endif; ?>
                     </div>
                     <div class="card-footer">

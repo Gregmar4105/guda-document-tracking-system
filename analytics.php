@@ -1181,7 +1181,7 @@ if ($live_status_res) {
                                     ?>
                                     <tr class="<?php echo $status_class; ?>">
                                         <td><a href="track.php?track_id=<?php echo urlencode($doc['voucher_code']); ?>" target="_blank"><?php echo htmlspecialchars($doc['voucher_code']); ?></a></td>
-                                        <td><?php echo htmlspecialchars($doc['document_title']); ?></td>
+                                        <td><?php echo htmlspecialchars(display_document_title($doc['document_title'])); ?></td>
                                         <td style="font-weight: 600;"><?php echo htmlspecialchars($doc['current_department']); ?></td>
                                         <td><?php echo $doc['time_in_queue_formatted']; ?></td>
                                         <td><?php echo !empty($doc['arta_deadline']) ? date('M d, Y', strtotime($doc['arta_deadline'])) : 'N/A'; ?></td>

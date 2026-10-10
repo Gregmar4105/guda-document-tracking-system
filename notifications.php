@@ -59,7 +59,7 @@ $stmt->close();
                                         <strong>Document Update</strong>
                                         <span class="notification-timestamp"><?php echo format_db_timestamp($notif['created_at']); ?></span>
                                     </div>
-                                    <p class="notification-remarks"><?php echo htmlspecialchars($notif['message']); ?></p>
+                                    <p class="notification-remarks"><?php echo htmlspecialchars(str_ireplace('Financial Voucher', 'Disbursement Voucher', $notif['message'])); ?></p>
                                 </div>
                             </a>
                         <?php endforeach; ?>

@@ -131,3 +131,10 @@ function format_db_timestamp($utc_timestamp, $format = 'M d, Y h:i A') {
         return 'Invalid Date'; // Return a clear error message on failure
     }
 }
+
+function display_document_title($title) {
+    $title = (string)$title;
+    return strcasecmp(trim($title), 'Financial Voucher') === 0
+        ? 'Disbursement Voucher'
+        : $title;
+}

@@ -158,6 +158,7 @@ if (empty($available_years)) {
     <title>My Records - NAAP Document System</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="records.css">
+    <link rel="stylesheet" href="print.css?v=<?php echo @filemtime('print.css'); ?>">
     <style>
         /* Renaming voucher-specific classes to be generic */
         .document-list {
@@ -190,14 +191,6 @@ if (empty($available_years)) {
                 display: block;
                 padding: 20px;
             }
-            .print-only .report-header {
-                text-align: center;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 2px solid #333;
-            }
-            .print-only .report-header h2 { font-size: 16pt; margin: 0; }
-            .print-only .report-header p { font-size: 10pt; margin: 5px 0 0 0; }
             .print-only table {
                 width: 100%;
                 border-collapse: collapse;
@@ -308,7 +301,7 @@ if (empty($available_years)) {
                                 <div style="display: flex; justify-content: space-between; align-items: start; gap: 20px;">
                                     <div style="flex: 1;">
                                         <div class="document-id"><?php echo htmlspecialchars($document['voucher_code']); ?></div>
-                                        <div class="document-title">Title: <strong><?php echo htmlspecialchars($document['document_title']); ?></strong></div>
+                                        <div class="document-title">Title: <strong><?php echo htmlspecialchars(display_document_title($document['document_title'])); ?></strong></div>
                                     </div>
                                     <span class="status-badge" style="background-color: <?php echo $status_colors[$document['status']] ?? '#64748b'; ?>"><?php echo htmlspecialchars($document['status']); ?></span>
                                 </div>
@@ -340,10 +333,15 @@ if (empty($available_years)) {
 
     <!-- Hidden section for printing -->
     <div class="print-only">
-        <div class="report-header">
-            <h2><?php echo htmlspecialchars($report_title); ?></h2>
+        <div class="print-report-header">
+            <div class="print-report-institution">National Aviation Academy of the Philippines</div>
+            <div class="print-report-office">Document Tracking System</div>
+            <h1><?php echo htmlspecialchars($report_title); ?></h1>
             <p><?php echo htmlspecialchars($report_period); ?></p>
-            <p style="font-size: 0.9em; color: #555; margin-top: 10px;">Generated on <?php echo date('F d, Y \a\t g:i A'); ?> by <?php echo htmlspecialchars($_SESSION['full_name']); ?></p>
+            <div class="print-report-meta">
+                <span>Prepared by: <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'User'); ?></span>
+                <span>Generated: <?php echo date('F j, Y g:i A'); ?></span>
+            </div>
         </div>
         <table>
             <thead>
@@ -360,7 +358,7 @@ if (empty($available_years)) {
                     <?php foreach ($my_documents as $document): ?>
                     <tr>
                         <td><?php echo htmlspecialchars($document['voucher_code']); ?></td>
-                        <td><?php echo htmlspecialchars($document['document_title']); ?></td>
+                        <td><?php echo htmlspecialchars(display_document_title($document['document_title'])); ?></td>
                         <td><?php echo format_db_timestamp($document['date_submitted'], 'M d, Y'); ?></td>
                         <td><?php echo htmlspecialchars($document['status']); ?></td>
                         <td>

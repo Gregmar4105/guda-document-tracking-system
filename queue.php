@@ -613,12 +613,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
     <title>NAAP - Approval Queue</title>
     <link rel="stylesheet" href="sidebar.css">
     <link rel="stylesheet" href="queue.css">
+    <link rel="stylesheet" href="print.css?v=<?php echo @filemtime('print.css'); ?>">
 </head>
-<body>
+<body class="queue-print">
 
 <?php include('sidebar.php'); ?>
 
 <div class="main-content">
+    <div class="print-report-header">
+        <div class="print-report-institution">National Aviation Academy of the Philippines</div>
+        <div class="print-report-office">Document Tracking System</div>
+        <h1><?php echo $voucher_found ? 'Voucher Review Report' : 'Approval Queue Report'; ?></h1>
+        <div class="print-report-meta">
+            <span>Office: <?php echo htmlspecialchars($dept_role); ?></span>
+            <span>Generated: <?php echo date('F j, Y g:i A'); ?></span>
+        </div>
+    </div>
     <div class="page-header">
         <h1>Decision Board / Approval Queue</h1>
         <p>Signatory Station: <strong style="color: var(--naap-navy);"><?php echo htmlspecialchars($dept_role); ?></strong></p>
@@ -640,7 +650,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                     <div class="pending-card">
                         <div class="pending-card-main">
                             <div class="pending-card-id"><?php echo htmlspecialchars($pv['voucher_code']); ?></div>
-                            <div class="pending-card-title"><?php echo htmlspecialchars($pv['document_title']); ?></div>
+                            <div class="pending-card-title"><?php echo htmlspecialchars(display_document_title($pv['document_title'])); ?></div>
                         </div>
                         <div class="pending-card-details">
                             <div><span>Type:</span> <?php echo htmlspecialchars($pv['effective_doc_type_name'] ?? 'N/A'); ?></div>
@@ -731,7 +741,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             
             <div class="info-row">
                 <label>Document Title</label>
-                <span><?php echo htmlspecialchars($voucher_found['document_title']); ?></span>
+                <span><?php echo htmlspecialchars(display_document_title($voucher_found['document_title'])); ?></span>
             </div>
 
             <?php if (!empty($voucher_found['reference_number'])): ?>

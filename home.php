@@ -99,7 +99,7 @@ function build_calendar($month, $year, $highlights = []) {
                 $tooltip = "<div class='tooltip'>";
                 foreach ($highlights[$currentDateStr]['documents'] as $doc) {
                     $voucher_code_html = htmlspecialchars($doc['voucher_code']);
-                    $document_title_html = htmlspecialchars($doc['document_title']);
+                    $document_title_html = htmlspecialchars(display_document_title($doc['document_title']));
                     $deadline_html = !empty($doc['arta_deadline'])
                         ? htmlspecialchars(date('M d, Y', strtotime($doc['arta_deadline'])))
                         : 'N/A';
@@ -751,7 +751,7 @@ foreach ($documents_for_calendar as $doc) {
                                 <a href="track.php?code=<?php echo urlencode($item['voucher_code']); ?>" target="_blank">
                                     <strong><?php echo htmlspecialchars($item['voucher_code']); ?></strong>
                                 </a>
-                                <span><?php echo htmlspecialchars($item['document_title']); ?></span>
+                                <span><?php echo htmlspecialchars(display_document_title($item['document_title'])); ?></span>
                             </div>
                             <div class="tooltip-doc-body">
                                 <strong>From:</strong> <?php echo htmlspecialchars($item['requestor_name']); ?>

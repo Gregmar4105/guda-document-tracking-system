@@ -131,7 +131,11 @@ applyMigration('add_arta_levels_table_20240217', [
 // Migration 4: Add system default financial doc type
 applyMigration('add_financial_doc_type_20240218', [
     "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_system_default` TINYINT(1) NOT NULL DEFAULT 0",
-    "INSERT IGNORE INTO `document_types` (`name`, `arta_level`, `workflow_type`, `is_system_default`, `is_active`) VALUES ('Financial Voucher', 'Complex', 'Approval', 1, 1)"
+    "INSERT IGNORE INTO `document_types` (`name`, `arta_level`, `workflow_type`, `is_system_default`, `is_active`) VALUES ('Disbursement Voucher', 'Complex', 'Approval', 1, 1)"
+], $conn);
+
+applyMigration('rename_financial_doc_type_to_disbursement_20261010', [
+    "UPDATE `document_types` SET `name` = 'Disbursement Voucher' WHERE `is_system_default` = 1 AND `name` = 'Financial Voucher'"
 ], $conn);
 
 // Migration 5: Add ARTA level to financial voucher types

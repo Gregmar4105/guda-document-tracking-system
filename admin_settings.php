@@ -127,10 +127,9 @@ require_once 'db_connect.php';
                 </div>
             </div>
             <div class="admin-section">
-                <h2>Financial Voucher Types & Requirements</h2>
+                <h2>Disbursement Voucher Types & Requirements</h2>
                 <div class="admin-section-content">
-                    <!-- Your "Add New Financial Type" and "Existing Financial Types" PHP/HTML code goes here -->
-                    <p><em>(Your financial voucher type management UI goes here...)</em></p>
+                    <p><em>(Disbursement voucher type management.)</em></p>
                 </div>
             </div>
         </div>
@@ -140,10 +139,10 @@ require_once 'db_connect.php';
         <!-- ================================================== -->
         <div id="tab-settings" class="tab-panel">
             <div class="admin-section">
-                <h2>Financial Guidelines</h2>
+                <h2>Disbursement Voucher Guidelines</h2>
                 <div class="admin-section-content">
                     <!-- Your "General Voucher Amount Guidelines" PHP/HTML code goes here -->
-                    <p><em>(Your financial guidelines form goes here...)</em></p>
+                    <p><em>(Disbursement voucher guidelines.)</em></p>
                 </div>
             </div>
             <div class="admin-section">

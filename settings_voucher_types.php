@@ -1,11 +1,11 @@
-<div class="card"> <!-- Financial Voucher Types & Requirements -->
-    <h3 class="card-title">Financial Voucher Types & Requirements</h3>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Define types for financial transactions and their required attachments. These appear when a user creates a financial request.</p>
+<div class="card">
+    <h3 class="card-title">Disbursement Voucher Types & Requirements</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Define disbursement voucher types and their required attachments.</p>
     <div class="card-body">
 
         <!-- Add New Voucher Type -->
         <div class="doc-type-item" style="background: #fffbeb; border-color: #fde68a;">
-            <h4 style="margin-top:0; color: #92400e;">Add New Financial Type</h4>
+            <h4 style="margin-top:0; color: #92400e;">Add New Disbursement Voucher Type</h4>
             <form method="POST">
                 <div class="input-group">
                     <label>Voucher Type Name</label>
@@ -37,18 +37,18 @@
                         <input type="hidden" name="voucher_type_workflow" class="workflowInput" value="[]">
                     </div>
                 </div>
-                <button type="submit" name="add_voucher_type" class="btn btn-small btn-gold">Save New Financial Type</button>
+                <button type="submit" name="add_voucher_type" class="btn btn-small btn-gold">Save New Disbursement Voucher Type</button>
             </form>
         </div>
 
         <!-- List Existing Voucher Types -->
-        <form method="POST" id="bulkDeleteVoucherTypeForm" onsubmit="return confirm('Are you sure you want to delete the selected financial voucher types?');">
+        <form method="POST" id="bulkDeleteVoucherTypeForm" onsubmit="return confirm('Are you sure you want to delete the selected disbursement voucher types?');">
             <input type="hidden" name="delete_bulk_voucher_types" value="1">
         </form>
         <h4 style="margin-top: 30px; display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="selectAllVoucherTypes" style="width: 20px; height: 20px;">
             <label for="selectAllVoucherTypes" style="margin-bottom: 0; font-size: 1.1rem; color: var(--text-dark); cursor: pointer;">Select All</label>
-            Existing Financial Types
+            Existing Disbursement Voucher Types
         </h4>
         <?php foreach($all_voucher_types as $v_type): 
             $v_workflow = json_decode($v_type['default_workflow'] ?? '[]', true);
@@ -115,7 +115,7 @@
             </div>
         <?php endforeach; ?>
         <?php if (empty($all_voucher_types)): ?>
-            <p style="text-align: center; color: var(--text-muted); padding: 20px; background: #f8fafc; border-radius: 6px;">No financial voucher types have been created yet.</p>
+            <p style="text-align: center; color: var(--text-muted); padding: 20px; background: #f8fafc; border-radius: 6px;">No disbursement voucher types have been created yet.</p>
         <?php endif; ?>
     </div>
     <div class="card-footer">

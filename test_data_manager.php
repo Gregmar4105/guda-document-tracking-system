@@ -96,7 +96,7 @@ function test_data_manager_delete_record($conn, $entity, $record_id) {
         $type_id = (int)$record_id;
         $table = $entity === 'document_type' ? 'document_types' : 'voucher_types';
         $reference_column = $entity === 'document_type' ? 'doc_type_id' : 'voucher_type_id';
-        $display_name = $entity === 'document_type' ? 'Document type' : 'Financial voucher type';
+        $display_name = $entity === 'document_type' ? 'Document type' : 'Disbursement voucher type';
 
         if ($entity === 'document_type') {
             $stmt = $conn->prepare('SELECT is_system_default FROM document_types WHERE id = ? FOR UPDATE');
@@ -733,7 +733,7 @@ $escape = static function ($value) {
         ['Live vouchers', $vouchers, 'voucher', static function ($row) use ($escape) {
             return [
                 $escape($row['voucher_code']),
-                $escape($row['document_title']),
+                $escape(display_document_title($row['document_title'])),
                 $escape($row['requestor_name'] ?? 'Unknown'),
                 $escape($row['status']),
                 $escape($row['date_submitted'])
@@ -742,12 +742,12 @@ $escape = static function ($value) {
         ['Document types', $document_types, 'document_type', static function ($row) use ($escape) {
             return [
                 $escape($row['id']),
-                $escape($row['name']),
+                $escape(!empty($row['is_system_default']) && strcasecmp($row['name'], 'Financial Voucher') === 0 ? 'Disbursement Voucher' : $row['name']),
                 $escape($row['is_active'] ? 'Active' : 'Inactive'),
                 $escape((int)$row['live_references'] + (int)$row['archived_references'])
             ];
         }, ['ID', 'Name', 'Status', 'Voucher references']],
-        ['Financial voucher types', $voucher_types, 'voucher_type', static function ($row) use ($escape) {
+        ['Disbursement voucher types', $voucher_types, 'voucher_type', static function ($row) use ($escape) {
             return [
                 $escape($row['id']),
                 $escape($row['name']),
@@ -769,7 +769,7 @@ $escape = static function ($value) {
                 $escape($row['id']),
                 $escape($row['recipient_name'] ?? ('User ID ' . $row['user_id'])),
                 $escape($row['voucher_code'] ?? ''),
-                $escape($row['message']),
+                $escape(str_ireplace('Financial Voucher', 'Disbursement Voucher', $row['message'])),
                 $escape($row['is_read'] ? 'Read' : 'Unread'),
                 $escape($row['created_at'])
             ];

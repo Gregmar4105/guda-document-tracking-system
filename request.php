@@ -48,7 +48,7 @@ $session_requestor_role = $_SESSION['role'] ?? '';
 
 // Fetch document types for the dropdown
 $document_types = [];
-$types_res = $conn->query("SELECT id, name, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 ORDER BY name ASC");
+$types_res = $conn->query("SELECT id, name, is_system_default, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 ORDER BY name ASC");
 while ($type_row = $types_res->fetch_assoc()) {
     $document_types[] = $type_row;
 }
@@ -71,7 +71,7 @@ while ($arta_row = $arta_res->fetch_assoc()) {
 
 // Get the ID of the default financial doc type
 $default_financial_doc_type_id = null;
-$fin_type_stmt = $conn->query("SELECT id FROM document_types WHERE is_system_default = 1 AND name = 'Financial Voucher' LIMIT 1");
+$fin_type_stmt = $conn->query("SELECT id FROM document_types WHERE is_system_default = 1 LIMIT 1");
 if ($fin_type_stmt && $fin_type_row = $fin_type_stmt->fetch_assoc()) {
     $default_financial_doc_type_id = $fin_type_row['id'];
 }
@@ -124,7 +124,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // If a financial voucher type is selected, it overrides the document type and title.
     if (!empty($voucher_type_id)) {
         $doc_type_id = null;
-        $doc_title = "Financial Voucher";
+        $doc_title = "Disbursement Voucher";
     }
 
     // --- NEW: LEARNING MECHANISM FOR DOCUMENT TYPES ---
@@ -329,6 +329,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <title>NAAP - Prepare Document Request</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="request.css">
+    <link rel="stylesheet" href="print.css?v=<?php echo @filemtime('print.css'); ?>">
     <style>
         .radio-group {
             display: flex;
@@ -440,7 +441,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             data-workflow='<?php echo htmlspecialchars($type['default_workflow'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>'
                             data-workflow-type='<?php echo htmlspecialchars($type['workflow_type'] ?? 'Approval', ENT_QUOTES, 'UTF-8'); ?>'
                             data-arta-level='<?php echo htmlspecialchars($type['arta_level'] ?? 'Simple', ENT_QUOTES, 'UTF-8'); ?>'>
-                            <?php echo htmlspecialchars($type['name']); ?>
+                            <?php echo htmlspecialchars($type['is_system_default'] ? 'Disbursement Voucher' : $type['name']); ?>
                         </option>
                     <?php endforeach; ?>
                     <option value="custom">Other (Type a new one)...</option>
@@ -479,12 +480,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="input-group" style="background: #fffbeb; padding: 15px; border-radius: 6px; border: 1px solid #fde68a;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" id="has_financial" name="has_financial" style="width: 20px; height: 20px;" onchange="toggleFinancial()">
-                    <label for="has_financial" style="margin: 0; font-weight: bold; color: #92400e; cursor: pointer;">This request involves a financial transaction</label>
+                    <label for="has_financial" style="margin: 0; font-weight: bold; color: #92400e; cursor: pointer;">This request involves a disbursement voucher</label>
                 </div>
             </div>
             <div id="financial_fields" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-light);">
                 <div class="input-group">
-                    <label>Financial Voucher Type</label>
+                    <label>Disbursement Voucher Type</label>
                     <select name="voucher_type_id" id="voucher_type_select" onchange="handleVoucherTypeChange()">
                         <option value="">-- Select a voucher type --</option>
                         <?php foreach($voucher_types_data as $v_type): ?>
@@ -566,6 +567,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <?php if ($show_modal): ?>
 <div class="modal-overlay">
     <div class="print-card">
+        <div class="print-report-header">
+            <div class="print-report-institution">National Aviation Academy of the Philippines</div>
+            <div class="print-report-office">Document Tracking System</div>
+            <h1>Document Routing Slip</h1>
+            <div class="print-report-meta">
+                <span>Prepared by: <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'User'); ?></span>
+                <span>Generated: <?php echo date('F j, Y g:i A'); ?></span>
+            </div>
+        </div>
         <h2 style="color: var(--naap-navy); margin: 0; font-size: 1.3rem; letter-spacing: 1px;">✅ SUBMISSION SUCCESS</h2>
         <p style="color: var(--text-muted); font-size: 0.8rem; margin: 5px 0;">Tracking ID:</p>
         <p style="font-weight: 800; font-size: 1.3rem; margin: 0 0 5px 0; color: var(--naap-navy);"><?php echo $voucher_id; ?></p>
@@ -683,7 +693,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             amountInput.required = true;
 
             // Automatically set the document title
-            docTitleInput.value = 'Financial Voucher';
+            docTitleInput.value = 'Disbursement Voucher';
             docTitleInput.readOnly = true; // Prevent user from changing it
             purposeTextarea.focus();
 
@@ -878,7 +888,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (currentRoute.length === 0) {
             let msg = "Please select a Document Type to see its default route, or choose 'Other' to build a custom one.";
             if (document.getElementById('has_financial').checked) {
-                msg = "Please select a Financial Voucher Type to load its mandatory route.";
+                msg = "Please select a Disbursement Voucher Type to load its mandatory route.";
             }
             list.innerHTML = `<li style='padding: 25px; color: var(--text-muted); text-align: center; font-style: italic; font-size: 0.9rem;'>${msg}</li>`;
         } else {

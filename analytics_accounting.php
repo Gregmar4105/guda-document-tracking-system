@@ -203,9 +203,10 @@ foreach ($spending_by_dept as $data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Analytics - NAAP</title>
+    <title>Disbursement Voucher Analytics - NAAP</title>
     <link rel="stylesheet" href="sidebar.css?v=<?php echo @filemtime('sidebar.css'); ?>">
     <link rel="stylesheet" href="analytics.css?v=<?php echo @filemtime('analytics.css'); ?>">
+    <link rel="stylesheet" href="print.css?v=<?php echo @filemtime('print.css'); ?>">
     <style>
         @media print {
             @page {
@@ -222,8 +223,17 @@ foreach ($spending_by_dept as $data) {
 
 <div class="main-content">
     <div class="container">
+        <div class="print-report-header">
+            <div class="print-report-institution">National Aviation Academy of the Philippines</div>
+            <div class="print-report-office">Accounting Office</div>
+            <h1>Disbursement Voucher Analytics Report</h1>
+            <div class="print-report-meta">
+                <span>Prepared by: <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Accounting Head'); ?></span>
+                <span>Generated: <?php echo date('F j, Y g:i A'); ?></span>
+            </div>
+        </div>
         <div class="page-header">
-            <h1>Financial Analytics</h1>
+            <h1>Disbursement Voucher Analytics</h1>
             <p>A summary of document actions across all departments.</p>
         </div>
 
@@ -281,7 +291,7 @@ foreach ($spending_by_dept as $data) {
         <div class="stats-grid" style="margin-top: 30px;">
             <div class="stat-card">
                 <div class="stat-card-header">
-                    <h3>Financial Voucher Outcomes</h3>
+                    <h3>Disbursement Voucher Outcomes</h3>
                 </div>
                 <div class="chart-container">
                     <canvas id="outcomesChart"></canvas>
@@ -403,7 +413,7 @@ foreach ($spending_by_dept as $data) {
     <div class="container" style="margin-top: 50px;">
         <div class="page-header">
             <h1>Top Departments by Spending</h1>
-            <p>Total value of requested financial vouchers per office.</p>
+            <p>Total value of requested disbursement vouchers per office.</p>
         </div>
 
         <div class="stats-grid" style="grid-template-columns: 1fr; margin-bottom: 30px;">

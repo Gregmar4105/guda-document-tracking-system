@@ -1080,7 +1080,7 @@ foreach ($all_departments as $key => $dept) {
                                         <input type="checkbox" name="voucher_type_ids[]" value="<?php echo $v_type['id']; ?>" form="bulkDeleteVoucherTypeForm" style="width: 20px; height: 20px;">
                                         <div class="doc-type-info">
                                             <strong><?php echo htmlspecialchars($v_type['name']); ?></strong>
-                                            <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items<?php if ($v_type['fixed_amount'] !== null): ?> | Fixed amount: PHP <?php echo number_format((float)$v_type['fixed_amount'], 2); ?><?php endif; ?></small>
+                                            <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items<?php if (($v_type['fixed_amount'] ?? null) !== null): ?> | Fixed amount: PHP <?php echo number_format((float)$v_type['fixed_amount'], 2); ?><?php endif; ?></small>
                                             <ul class="workflow-list">
                                                 <?php foreach($v_workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
                                             </ul>

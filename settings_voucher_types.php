@@ -22,6 +22,10 @@
                     <textarea name="requirements" placeholder="Enter one requirement per line..."></textarea>
                 </div>
                 <div class="input-group">
+                    <label>Fixed Amount (PHP, optional)</label>
+                    <input type="number" name="voucher_fixed_amount" min="0" step="0.01" placeholder="Leave blank to let requestors enter an amount">
+                </div>
+                <div class="input-group">
                     <label>Mandatory Routing Sequence</label>
                     <div class="workflow-builder" data-id="v-new">
                         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
@@ -86,6 +90,10 @@
                         <div class="input-group">
                             <label>Requirements (one per line)</label>
                             <textarea name="requirements"><?php echo htmlspecialchars(implode("\n", $v_reqs)); ?></textarea>
+                        </div>
+                        <div class="input-group">
+                            <label>Fixed Amount (PHP, optional)</label>
+                            <input type="number" name="voucher_fixed_amount" min="0" step="0.01" value="<?php echo htmlspecialchars($v_type['fixed_amount'] ?? ''); ?>" placeholder="Leave blank to let requestors enter an amount">
                         </div>
                         <div class="input-group">
                             <label>Mandatory Routing Sequence</label>

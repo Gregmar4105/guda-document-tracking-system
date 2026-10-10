@@ -36,7 +36,7 @@ while ($type_row = $types_res->fetch_assoc()) { // Add arta_level to this fetch
 
 // Fetch financial voucher types for the dynamic dropdown
 $voucher_types = [];
-$v_types_res = $conn->query("SELECT id, name, arta_level, requirements, default_workflow FROM voucher_types WHERE is_active = 1 ORDER BY name ASC");
+$v_types_res = $conn->query("SELECT id, name, arta_level, requirements, default_workflow, fixed_amount FROM voucher_types WHERE is_active = 1 ORDER BY name ASC");
 while ($v_type_row = $v_types_res->fetch_assoc()) {
     $voucher_types[] = $v_type_row;
 }
@@ -93,6 +93,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $amount = isset($_POST['has_financial']) ? ($_POST['amount'] ?? null) : null;
     $voucher_type_id = isset($_POST['has_financial']) ? ($_POST['voucher_type_id'] ?? null) : null;
     $budget_code = isset($_POST['has_financial']) ? trim($_POST['budget_code'] ?? null) : null;
+    if (isset($_POST['has_financial']) && empty($voucher_type_id)) {
+        $db_error = "Select a disbursement voucher type.";
+    }
 
     $custom_workflow_json = $_POST['custom_workflow'] ?? '[]';
     $custom_workflow_arr = json_decode($custom_workflow_json, true) ?? [];
@@ -108,14 +111,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // If it's a financial transaction, use the ARTA level from the selected voucher type
     if (isset($_POST['has_financial']) && $voucher_type_id) {
-        $fin_arta_stmt = $conn->prepare("SELECT arta_level FROM voucher_types WHERE id = ?");
+        $fin_arta_stmt = $conn->prepare("SELECT arta_level, fixed_amount FROM voucher_types WHERE id = ? AND is_active = 1");
         $fin_arta_stmt->bind_param("i", $voucher_type_id);
         $fin_arta_stmt->execute();
         if ($fin_arta_res = $fin_arta_stmt->get_result()) {
-            if ($fin_arta_row = $fin_arta_res->fetch_assoc()) { $arta_level = $fin_arta_row['arta_level']; }
+            if ($fin_arta_row = $fin_arta_res->fetch_assoc()) {
+                $arta_level = $fin_arta_row['arta_level'];
+                if ($fin_arta_row['fixed_amount'] !== null) {
+                    $amount = $fin_arta_row['fixed_amount'];
+                } elseif (!is_numeric($amount) || (float)$amount < 0) {
+                    $db_error = "Enter a valid disbursement voucher amount.";
+                } else {
+                    $amount = (float)$amount;
+                }
+            } else {
+                $db_error = "Select a valid disbursement voucher type.";
+            }
         }
         $fin_arta_stmt->close();
         $arta_deadline = calculateARTADeadline(date('Y-m-d'), $arta_level, $conn); // Recalculate with specific financial ARTA
+    } elseif (isset($_POST['has_financial'])) {
+        $db_error = "Select a disbursement voucher type.";
     }
     $arta_deadline = calculateARTADeadline(date('Y-m-d'), $arta_level, $conn);
 
@@ -135,6 +151,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $new_voucher_id = "NAAP-" . date("Y") . "-" . rand(1000, 9999);
 
     // 5. SAVE NEW DOCUMENT TO DATABASE
+    if (empty($db_error)) {
     $insert_stmt = $conn->prepare("INSERT INTO vouchers (voucher_code, requestor_id, document_title, doc_type_id, voucher_type_id, reference_number, tags, amount, budget_code, purpose, status, current_stage_index, custom_workflow, arta_deadline) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Review', 1, ?, ?)");
     $insert_stmt->bind_param("sisiissdssss", $new_voucher_id, $requestor_id, $doc_title, $doc_type_id, $voucher_type_id, $reference_number, $tags, $amount, $budget_code, $purpose, $custom_workflow_json, $arta_deadline);
     
@@ -214,6 +231,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     } else {
         $db_error = "Database Error: " . $conn->error;
+    }
     }
 }
 
@@ -418,13 +436,13 @@ if (strpos($return_remarks, '--- MISSING/INCOMPLETE REQUIREMENTS ---') !== false
 
             <div class="input-group" style="background: #fffbeb; padding: 15px; border-radius: 6px; border: 1px solid #fde68a;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="has_financial_display" name="has_financial_display" style="width: 20px; height: 20px;" <?php if(!empty($amount)) echo 'checked'; ?> disabled>
-                    <?php if(!empty($amount)): ?><input type="hidden" name="has_financial" value="on"><?php endif; ?>
+                    <input type="checkbox" id="has_financial_display" name="has_financial_display" style="width: 20px; height: 20px;" <?php if(!empty($voucher_type_id) || ($amount !== null && $amount !== '')) echo 'checked'; ?> disabled>
+                    <?php if(!empty($voucher_type_id) || ($amount !== null && $amount !== '')): ?><input type="hidden" name="has_financial" value="on"><?php endif; ?>
                     <label for="has_financial" style="margin: 0; font-weight: bold; color: #92400e; cursor: pointer;">This request involves a disbursement voucher</label>
                 </div>
             </div>
 
-            <div id="financial_fields" style="display: <?php echo !empty($amount) ? 'block' : 'none'; ?>; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-light);">
+            <div id="financial_fields" style="display: <?php echo (!empty($voucher_type_id) || ($amount !== null && $amount !== '')) ? 'block' : 'none'; ?>; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-light);">
                 <div class="input-group">
                     <label>Disbursement Voucher Type</label>
                     <select name="voucher_type_id_display" id="voucher_type_select" disabled>
@@ -442,7 +460,8 @@ if (strpos($return_remarks, '--- MISSING/INCOMPLETE REQUIREMENTS ---') !== false
                 </div>
                 <div class="input-group">
                     <label>Amount (PHP)</label>
-                    <input type="number" name="amount" step="0.01" value="<?php echo htmlspecialchars($amount); ?>" placeholder="0.00" readonly>
+                    <input type="number" name="amount" min="0" step="0.01" value="<?php echo htmlspecialchars($amount); ?>" placeholder="0.00" readonly>
+                    <small id="fixed_amount_note" style="display:none; color:var(--text-muted);"></small>
                 </div>
                 <div class="input-group">
                     <label>Budget Code (Optional)</label>
@@ -627,6 +646,23 @@ if (strpos($return_remarks, '--- MISSING/INCOMPLETE REQUIREMENTS ---') !== false
         const artaInfoPanel = document.getElementById('arta_info_panel');
         const customizationPanel = document.getElementById('customization_panel');
         const selectedType = voucherTypesData.find(vt => vt.id == selectedId);
+        const amountInput = document.querySelector('#financial_fields input[name="amount"]');
+        const fixedAmountNote = document.getElementById('fixed_amount_note');
+        if (selectedType && selectedType.fixed_amount !== null && selectedType.fixed_amount !== '') {
+            amountInput.value = Number(selectedType.fixed_amount).toFixed(2);
+            amountInput.readOnly = true;
+            amountInput.required = false;
+            amountInput.dataset.fixedAmount = 'true';
+            fixedAmountNote.textContent = 'This voucher type has a fixed amount and cannot be changed.';
+            fixedAmountNote.style.display = 'block';
+        } else {
+            if (amountInput.dataset.fixedAmount === 'true') amountInput.value = '';
+            amountInput.readOnly = false;
+            amountInput.required = Boolean(selectedType);
+            delete amountInput.dataset.fixedAmount;
+            fixedAmountNote.textContent = '';
+            fixedAmountNote.style.display = 'none';
+        }
 
         if (selectedType && selectedType.requirements) {
             try {
@@ -699,7 +735,7 @@ if (strpos($return_remarks, '--- MISSING/INCOMPLETE REQUIREMENTS ---') !== false
         // Trigger change handler if a voucher type is pre-selected on page load
         const voucherSelect = document.getElementById('voucher_type_select');
         if (voucherSelect.value) {
-            voucherSelect.dispatchEvent(new Event('change'));
+            handleVoucherTypeChange();
         }
     });
 

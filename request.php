@@ -55,7 +55,7 @@ while ($type_row = $types_res->fetch_assoc()) {
 
 // Fetch financial voucher types for the dynamic dropdown
 $voucher_types_data = []; // Renamed to avoid conflict with $voucher_types in JS
-$v_types_res = $conn->query("SELECT id, name, arta_level, requirements, default_workflow FROM voucher_types WHERE is_active = 1 ORDER BY name ASC");
+$v_types_res = $conn->query("SELECT id, name, arta_level, requirements, default_workflow, fixed_amount FROM voucher_types WHERE is_active = 1 ORDER BY name ASC");
 while ($v_type_row = $v_types_res->fetch_assoc()) {
     $voucher_types_data[] = $v_type_row;
 }
@@ -121,6 +121,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $voucher_type_id = isset($_POST['has_financial']) ? ($_POST['voucher_type_id'] ?? null) : null;
     $budget_code = isset($_POST['has_financial']) ? trim($_POST['budget_code'] ?? null) : null;
 
+    if (isset($_POST['has_financial']) && empty($voucher_type_id)) {
+        $db_error = "Select a disbursement voucher type.";
+    }
+
     // If a financial voucher type is selected, it overrides the document type and title.
     if (!empty($voucher_type_id)) {
         $doc_type_id = null;
@@ -181,7 +185,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // If it's a financial transaction, use the ARTA level from the selected voucher type
     if (isset($_POST['has_financial']) && $voucher_type_id) {
-        $fin_arta_stmt = $conn->prepare("SELECT arta_level FROM voucher_types WHERE id = ?");
+        $fin_arta_stmt = $conn->prepare("SELECT arta_level, fixed_amount FROM voucher_types WHERE id = ? AND is_active = 1");
         $fin_arta_stmt->bind_param("i", $voucher_type_id);
         $fin_arta_stmt->execute();
         if ($fin_arta_res = $fin_arta_stmt->get_result()) {
@@ -189,9 +193,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if (!empty($fin_arta_row['arta_level'])) {
                     $arta_level = $fin_arta_row['arta_level'];
                 }
+                if ($fin_arta_row['fixed_amount'] !== null) {
+                    $amount = $fin_arta_row['fixed_amount'];
+                } elseif (!is_numeric($amount) || (float)$amount < 0) {
+                    $db_error = "Enter a valid disbursement voucher amount.";
+                } else {
+                    $amount = (float)$amount;
+                }
+            } else {
+                $db_error = "Select a valid disbursement voucher type.";
             }
         }
         $fin_arta_stmt->close();
+    } elseif (isset($_POST['has_financial'])) {
+        $db_error = "Select a disbursement voucher type.";
     }
 
     // Now that the final ARTA level is determined, calculate the deadline and processing days
@@ -501,7 +516,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 <div class="input-group">
                     <label>Amount (PHP)</label>
-                    <input type="number" name="amount" step="0.01" placeholder="0.00">
+                    <input type="number" name="amount" min="0" step="0.01" placeholder="0.00">
+                    <small id="fixed_amount_note" style="display:none; color:var(--text-muted);"></small>
                 </div>
                 <div class="input-group">
                     <label>Budget Code (Optional)</label>
@@ -655,7 +671,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     const usersByDept = <?php echo json_encode($users_by_dept); ?>; // dept => [user rows]
     const usersHeadsByDept = <?php echo json_encode($users_heads_by_dept); ?>; // dept => [user rows who are heads]
     const sessionRequestorRole = <?php echo json_encode($session_requestor_role); ?>;
-    const voucherTypesData = <?php echo json_encode($voucher_types_data); ?>; // voucher_type_id => {name, arta_level, requirements, default_workflow}
+    const voucherTypesData = <?php echo json_encode($voucher_types_data); ?>; // voucher_type_id => {name, arta_level, requirements, default_workflow, fixed_amount}
 
 
     function toggleWorkflowType() {
@@ -685,12 +701,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         const amountInput = fieldsDiv.querySelector('input[name="amount"]');
         const docTypeGroup = document.getElementById('doc_type_group');
         const docTypeSelect = document.getElementById('doc_type_select');
+        const voucherTypeSelect = document.getElementById('voucher_type_select');
         const docTitleInput = document.getElementById('document_title');
         const purposeTextarea = document.getElementById('purpose');
 
         if (checkbox.checked) {
             fieldsDiv.style.display = 'block';
-            amountInput.required = true;
+            voucherTypeSelect.required = true;
 
             // Automatically set the document title
             docTitleInput.value = 'Disbursement Voucher';
@@ -711,6 +728,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             fieldsDiv.style.display = 'none';
             amountInput.required = false;
+            amountInput.readOnly = false;
+            amountInput.value = '';
+            voucherTypeSelect.required = false;
+            voucherTypeSelect.value = '';
+            document.getElementById('fixed_amount_note').style.display = 'none';
             docTitleInput.value = '';
             docTitleInput.readOnly = false;
 
@@ -965,6 +987,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         const artaInfoPanel = document.getElementById('arta_info_panel');
         const customizationPanel = document.getElementById('customization_panel');
         const selectedType = voucherTypesData.find(vt => vt.id == selectedId);
+        const amountInput = document.querySelector('#financial_fields input[name="amount"]');
+        const fixedAmountNote = document.getElementById('fixed_amount_note');
+        if (selectedType && selectedType.fixed_amount !== null && selectedType.fixed_amount !== '') {
+            amountInput.value = Number(selectedType.fixed_amount).toFixed(2);
+            amountInput.readOnly = true;
+            amountInput.required = false;
+            amountInput.dataset.fixedAmount = 'true';
+            fixedAmountNote.textContent = 'This voucher type has a fixed amount and cannot be changed.';
+            fixedAmountNote.style.display = 'block';
+        } else {
+            if (amountInput.dataset.fixedAmount === 'true') amountInput.value = '';
+            amountInput.readOnly = false;
+            amountInput.required = Boolean(selectedType);
+            delete amountInput.dataset.fixedAmount;
+            fixedAmountNote.textContent = '';
+            fixedAmountNote.style.display = 'none';
+        }
 
         if (selectedType && selectedType.requirements) {
             try {

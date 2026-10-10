@@ -181,6 +181,10 @@ applyMigration('add_min_max_to_voucher_types_20240409', [
     "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `max_amount` DECIMAL(15, 2) NULL DEFAULT NULL AFTER `min_amount`"
 ], $conn);
 
+applyMigration('add_fixed_amount_to_voucher_types_20261010', [
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `fixed_amount` DECIMAL(15, 2) NULL DEFAULT NULL AFTER `max_amount`"
+], $conn);
+
 // Migration 12: Add general min/max amount guidelines for DSS
 applyMigration('add_general_min_max_settings_20240410', [
     "INSERT IGNORE INTO `system_settings` (`setting_key`, `setting_value`) VALUES ('general_min_amount', '')",

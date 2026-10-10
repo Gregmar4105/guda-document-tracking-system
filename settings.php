@@ -223,13 +223,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $req_json = json_encode($req_array);
         $arta_level = $_POST['voucher_arta_level'];
         $workflow_json = $_POST['voucher_type_workflow'];
+        $fixed_amount_input = trim($_POST['voucher_fixed_amount'] ?? '');
+        $fixed_amount_value = $fixed_amount_input === '' ? null : filter_var($fixed_amount_input, FILTER_VALIDATE_FLOAT);
 
-        $stmt = $conn->prepare("INSERT INTO voucher_types (name, arta_level, requirements, default_workflow) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $name, $arta_level, $req_json, $workflow_json);
+        if ($fixed_amount_input !== '' && ($fixed_amount_value === false || $fixed_amount_value < 0 || $fixed_amount_value > 9999999999999.99)) {
+            $error_msg = "Fixed amount must be a valid amount of zero or more.";
+        } else {
+        $fixed_amount = $fixed_amount_input === '' ? null : number_format((float)$fixed_amount_value, 2, '.', '');
+        $stmt = $conn->prepare("INSERT INTO voucher_types (name, arta_level, requirements, default_workflow, fixed_amount) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssss", $name, $arta_level, $req_json, $workflow_json, $fixed_amount);
         if ($stmt->execute()) {
             $success_msg = "Disbursement Voucher Type '$name' created successfully.";
         } else {
             $error_msg = "Error creating voucher type: " . $conn->error;
+        }
         }
     }
     elseif (isset($_POST['update_voucher_type'])) {
@@ -240,13 +247,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $req_json = json_encode($req_array);
         $arta_level = $_POST['voucher_arta_level'];
         $workflow_json = $_POST['voucher_type_workflow'];
+        $fixed_amount_input = trim($_POST['voucher_fixed_amount'] ?? '');
+        $fixed_amount_value = $fixed_amount_input === '' ? null : filter_var($fixed_amount_input, FILTER_VALIDATE_FLOAT);
 
-        $stmt = $conn->prepare("UPDATE voucher_types SET name = ?, arta_level = ?, requirements = ?, default_workflow = ? WHERE id = ?");
-        $stmt->bind_param("ssssi", $name, $arta_level, $req_json, $workflow_json, $id);
+        if ($fixed_amount_input !== '' && ($fixed_amount_value === false || $fixed_amount_value < 0 || $fixed_amount_value > 9999999999999.99)) {
+            $error_msg = "Fixed amount must be a valid amount of zero or more.";
+        } else {
+        $fixed_amount = $fixed_amount_input === '' ? null : number_format((float)$fixed_amount_value, 2, '.', '');
+        $stmt = $conn->prepare("UPDATE voucher_types SET name = ?, arta_level = ?, requirements = ?, default_workflow = ?, fixed_amount = ? WHERE id = ?");
+        $stmt->bind_param("sssssi", $name, $arta_level, $req_json, $workflow_json, $fixed_amount, $id);
         if ($stmt->execute()) {
             $success_msg = "Disbursement Voucher Type '$name' updated successfully.";
         } else {
             $error_msg = "Error updating voucher type: " . $conn->error;
+        }
         }
     }
     elseif (isset($_POST['delete_bulk_voucher_types'])) {
@@ -1025,6 +1039,10 @@ foreach ($all_departments as $key => $dept) {
                                     <textarea name="requirements" placeholder="Enter one requirement per line..."></textarea>
                                 </div>
                                 <div class="input-group">
+                                    <label>Fixed Amount (PHP, optional)</label>
+                                    <input type="number" name="voucher_fixed_amount" min="0" step="0.01" placeholder="Leave blank to let requestors enter an amount">
+                                </div>
+                                <div class="input-group">
                                     <label>Mandatory Routing Sequence</label>
                                     <div class="workflow-builder" data-id="v-new">
                                         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
@@ -1062,7 +1080,7 @@ foreach ($all_departments as $key => $dept) {
                                         <input type="checkbox" name="voucher_type_ids[]" value="<?php echo $v_type['id']; ?>" form="bulkDeleteVoucherTypeForm" style="width: 20px; height: 20px;">
                                         <div class="doc-type-info">
                                             <strong><?php echo htmlspecialchars($v_type['name']); ?></strong>
-                                            <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items</small>
+                                            <small>ARTA: <?php echo htmlspecialchars($v_type['arta_level']); ?> | Requirements: <?php echo count($v_reqs); ?> items<?php if ($v_type['fixed_amount'] !== null): ?> | Fixed amount: PHP <?php echo number_format((float)$v_type['fixed_amount'], 2); ?><?php endif; ?></small>
                                             <ul class="workflow-list">
                                                 <?php foreach($v_workflow as $step): ?><li><?php echo htmlspecialchars($step); ?></li><?php endforeach; ?>
                                             </ul>
@@ -1088,6 +1106,10 @@ foreach ($all_departments as $key => $dept) {
                                         <div class="input-group">
                                             <label>Requirements (one per line)</label>
                                             <textarea name="requirements"><?php echo htmlspecialchars(implode("\n", $v_reqs)); ?></textarea>
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Fixed Amount (PHP, optional)</label>
+                                            <input type="number" name="voucher_fixed_amount" min="0" step="0.01" value="<?php echo htmlspecialchars($v_type['fixed_amount'] ?? ''); ?>" placeholder="Leave blank to let requestors enter an amount">
                                         </div>
                                         <div class="input-group">
                                             <label>Mandatory Routing Sequence</label>

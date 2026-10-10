@@ -720,8 +720,8 @@ foreach ($all_departments as $key => $dept) {
         <?php if($error_msg): ?> <div class="alert alert-error"><?php echo $error_msg; ?></div> <?php endif; ?>
 
         <?php if ($is_mis || $is_acct_head): // This is visible to both MIS and Acct Head ?>
-        <div class="settings-section">
-            <h2 class="section-heading">Disbursement Voucher Guidelines</h2>
+        <details class="settings-section settings-panel">
+            <summary class="section-heading">Disbursement Voucher Guidelines</summary>
             <div class="card">
                 <h3 class="card-title">Disbursement Voucher Amount Guidelines</h3>
                 <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Set system-wide minimum and maximum amount thresholds. Disbursement vouchers outside these guidelines will be flagged by the Decision Support System (DSS) for review.</p>
@@ -739,12 +739,12 @@ foreach ($all_departments as $key => $dept) {
                     <button type="submit" name="update_financial_guidelines" class="btn" style="margin-top: 10px;">Save Guidelines</button>
                 </form>
             </div>
-        </div>
+        </details>
         <?php endif; ?>
 
         <?php if ($is_mis): ?>
-            <div class="settings-section">
-                <h2 class="section-heading">User Management</h2>
+            <details class="settings-section settings-panel">
+                <summary class="section-heading">User Management</summary>
                 <div class="settings-grid">
                     <div class="card"> <h3 class="card-title">User Account Provisioning</h3>
                         <div class="card-body">
@@ -850,12 +850,12 @@ foreach ($all_departments as $key => $dept) {
                         </div>
                     </div>
                 </div>
-            </div>
+            </details>
         <?php endif; ?>
 
         <?php if ($is_mis): ?>
-            <div class="settings-section">
-                <h2 class="section-heading">Decision Support System (DSS)</h2>
+            <details class="settings-section settings-panel">
+                <summary class="section-heading">Decision Support System (DSS)</summary>
                 <div class="card">
                     <h3 class="card-title">User History Analysis</h3>
                     <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -20px; margin-bottom: 25px;">Configure the system to flag users with a high rate of returned or rejected documents, providing a notice to reviewers.</p>
@@ -885,12 +885,12 @@ foreach ($all_departments as $key => $dept) {
                         <button type="submit" name="update_dss_history_settings" class="btn" style="margin-top: 20px;">Save DSS Settings</button>
                     </form>
                 </div>
-            </div>
+            </details>
         <?php endif; ?>
 
         <?php if ($is_mis): ?>
-            <div class="settings-section">
-                <h2 class="section-heading">Institutional Structure</h2>
+            <details class="settings-section settings-panel">
+                <summary class="section-heading">Institutional Structure</summary>
                 <div class="card"> <h3 class="card-title">Departments & Job Titles</h3>
                     <div class="card-body">
                         <div class="doc-type-item" style="background: #f0f9ff; border-color: #bae6fd; margin-bottom: 25px;">
@@ -935,14 +935,14 @@ foreach ($all_departments as $key => $dept) {
                         <?php endforeach; ?>
                     </div>
                 </div>
-            </div>
+            </details>
         <?php endif; ?>
 
-        <div class="settings-section">
+        <details class="settings-section settings-panel">
             <?php if ($is_mis): ?>
-                <h2 class="section-heading">Workflow & Template Management</h2>
+                <summary class="section-heading">Workflow & Template Management</summary>
             <?php elseif ($is_acct_head): ?>
-                <h2 class="section-heading">Disbursement Voucher Template Management</h2>
+                <summary class="section-heading">Disbursement Voucher Template Management</summary>
             <?php endif; ?>
             <div class="settings-grid">
                 <?php if ($is_mis): ?>
@@ -1210,11 +1210,11 @@ foreach ($all_departments as $key => $dept) {
                     </div>
                 </div>
                 </div>
-        </div>
+        </details>
 
         <?php if ($is_mis): ?>
-        <div class="settings-section">
-            <h2 class="section-heading">System Configuration</h2>
+        <details class="settings-section settings-panel">
+            <summary class="section-heading">System Configuration</summary>
             <div class="settings-grid">
                 <div class="card"> <h3 class="card-title">Holiday Management</h3>
                     <div class="card-body">
@@ -1295,7 +1295,7 @@ foreach ($all_departments as $key => $dept) {
                     </div>
                 </div>
             </div>
-        </div>
+        </details>
         <?php endif; ?>
 </div>
 

@@ -55,6 +55,39 @@ body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; background: var(-
     border-bottom: 2px solid var(--border-light);
     font-weight: 600;
 }
+.settings-panel {
+    margin-bottom: 24px;
+}
+.settings-panel > .section-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    list-style: none;
+}
+.settings-panel:not([open]) > .section-heading {
+    margin-bottom: 0;
+}
+.settings-panel > .section-heading::-webkit-details-marker {
+    display: none;
+}
+.settings-panel > .section-heading::marker {
+    content: "";
+}
+.settings-panel > .section-heading::after {
+    content: "+";
+    margin-left: auto;
+    color: var(--naap-gold);
+    font-size: 1.5rem;
+    line-height: 1;
+}
+.settings-panel[open] > .section-heading::after {
+    content: "−";
+}
+.settings-panel > .section-heading:focus-visible {
+    outline: 3px solid var(--naap-gold);
+    outline-offset: 3px;
+}
 .card {
     background: white;
     padding: 30px;

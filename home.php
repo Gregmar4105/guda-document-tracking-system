@@ -429,15 +429,15 @@ if ($is_signatory) {
     }
 
     // Base SQL for all signatories
-    $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days 
+    $sql_base = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days,
+                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
             LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.status IN ('Pending Review', 'Processing', 'In Transit') 
-            AND v.arta_deadline IS NOT NULL 
-            AND (DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) <= ? AND v.arta_deadline >= ?)";
+            AND v.arta_deadline IS NOT NULL";
 
     $sql_where_stage = " AND (
         -- Case 1: Custom workflow step matches user's department
@@ -491,27 +491,27 @@ if ($is_signatory) {
         $sql = $sql_base . $sql_end;
         $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("sss", $last_day_of_month, $first_day_of_month, $like_param);
+        $deadline_stmt->bind_param("s", $like_param);
     } else {
         // Regular signatories see documents only at their specific stage.
         $sql = $sql_base . $sql_where_stage . $sql_end;
         $like_param = $base_dept_role . '%';
         $deadline_stmt = $conn->prepare($sql);
-        $deadline_stmt->bind_param("ssssiisiis", $last_day_of_month, $first_day_of_month, $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $my_user_id, $like_param);
+        $deadline_stmt->bind_param("ssiisiis", $base_dept_role, $base_dept_role, $is_head, $is_head, $base_dept_role, $my_stage_index, $my_user_id, $like_param);
     }
 } else {
     // Requestors see the deadlines for their own submitted documents.
-    $sql = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days 
+    $sql = "SELECT v.voucher_code, v.document_title, v.arta_deadline, DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) as start_date, al.processing_days,
+                    COALESCE(vt.name, dt.name, 'Unknown type') AS document_type
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
             LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
             WHERE v.requestor_id = ? 
             AND v.status IN ('Pending Review', 'Processing', 'In Transit') 
-            AND v.arta_deadline IS NOT NULL 
-            AND (v.arta_deadline >= ? AND DATE(CONVERT_TZ(v.date_submitted, 'UTC', 'Asia/Manila')) <= ?)";
+            AND v.arta_deadline IS NOT NULL";
     $deadline_stmt = $conn->prepare($sql);
-    $deadline_stmt->bind_param("iss", $my_user_id, $first_day_of_month, $last_day_of_month);
+    $deadline_stmt->bind_param("i", $my_user_id);
 }
 
 $deadline_stmt->execute();
@@ -519,6 +519,20 @@ $deadline_res = $deadline_stmt->get_result();
 $documents_for_calendar = $deadline_res->fetch_all(MYSQLI_ASSOC);
 $deadline_stmt->close();
 
+$deadline_scope_count = count($documents_for_calendar);
+$overdue_documents = [];
+$today_date = date('Y-m-d');
+$overdue_office = $is_signatory ? $base_dept_role : 'My submitted documents';
+foreach ($documents_for_calendar as $doc) {
+    if ($doc['arta_deadline'] < $today_date) {
+        $doc['office'] = $overdue_office;
+        $overdue_documents[] = $doc;
+    }
+}
+$overdue_count = count($overdue_documents);
+$overdue_percentage = $deadline_scope_count > 0
+    ? round(($overdue_count / $deadline_scope_count) * 100, 1)
+    : 0;
 
 // Process documents to create a highlight map for the calendar
 $date_highlights = [];
@@ -527,22 +541,23 @@ foreach ($documents_for_calendar as $doc) {
     if (empty($doc['start_date']) || empty($doc['arta_deadline'])) {
         continue;
     }
+    if ($doc['start_date'] > $last_day_of_month || $doc['arta_deadline'] < $first_day_of_month) {
+        continue;
+    }
 
     $start_date = new DateTime($doc['start_date']);
     $deadline_date = new DateTime($doc['arta_deadline']);
+    $period_start = new DateTime(max($doc['start_date'], $first_day_of_month));
+    $period_end = new DateTime(min($doc['arta_deadline'], $last_day_of_month));
     // Include every date from the request date through the deadline.
-    $period_end_date = (clone $deadline_date)->modify('+1 day');
+    $period_end_date = (clone $period_end)->modify('+1 day');
 
     $start_date_str = $start_date->format('Y-m-d');
     $deadline_date_str = $deadline_date->format('Y-m-d');
 
-    $period = new DatePeriod($start_date, new DateInterval('P1D'), $period_end_date);
+    $period = new DatePeriod($period_start, new DateInterval('P1D'), $period_end_date);
     foreach ($period as $date) {
         $date_str = $date->format('Y-m-d');
-
-        if ($date_str < $first_day_of_month || $date_str > $last_day_of_month) {
-            continue;
-        }
 
         $day_of_week = (int) $date->format('N');
         if ($day_of_week >= 6 || in_array($date_str, $holidays, true)) {
@@ -713,6 +728,62 @@ foreach ($documents_for_calendar as $doc) {
             <h3 style="margin-top:0; color: var(--naap-navy);">My Document Deadlines</h3>
             <p style="font-size: 0.85rem; color: #666; margin-top: -5px; margin-bottom: 20px;">Days with deadlines for your submitted documents are highlighted.</p>
         <?php endif; ?>
+
+        <div class="overdue-rate-panel">
+            <div>
+                <span class="overdue-rate-label">Overdue ARTA rate</span>
+                <span class="overdue-rate-caption"><?php echo $overdue_count; ?> of <?php echo $deadline_scope_count; ?> active documents</span>
+            </div>
+            <button type="button" class="overdue-rate-trigger" aria-haspopup="dialog" aria-controls="overdueBreakdownDialog" onclick="document.getElementById('overdueBreakdownDialog').showModal()">
+                <?php echo number_format($overdue_percentage, 1); ?>% overdue
+                <span>View breakdown</span>
+            </button>
+        </div>
+
+        <dialog class="overdue-breakdown-dialog" id="overdueBreakdownDialog" aria-labelledby="overdueBreakdownTitle">
+            <div class="overdue-breakdown-header">
+                <div>
+                    <p><?php echo htmlspecialchars($overdue_office); ?></p>
+                    <h2 id="overdueBreakdownTitle">Overdue ARTA documents</h2>
+                </div>
+                <button type="button" class="overdue-breakdown-close" aria-label="Close breakdown" onclick="document.getElementById('overdueBreakdownDialog').close()">Close</button>
+            </div>
+            <p class="overdue-breakdown-summary">
+                <?php echo $overdue_count; ?> of <?php echo $deadline_scope_count; ?> active documents are past their ARTA deadline
+                (<?php echo number_format($overdue_percentage, 1); ?>%).
+            </p>
+            <?php if (!empty($overdue_documents)): ?>
+                <div class="overdue-breakdown-table-wrap">
+                    <table class="overdue-breakdown-table">
+                        <thead>
+                            <tr>
+                                <th>Office</th>
+                                <th>Document ID</th>
+                                <th>Document type</th>
+                                <th>ARTA deadline</th>
+                                <th>Days overdue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($overdue_documents as $overdue_doc): ?>
+                                <?php
+                                    $days_overdue = max(1, (int)((strtotime($today_date) - strtotime($overdue_doc['arta_deadline'])) / 86400));
+                                ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($overdue_doc['office']); ?></td>
+                                    <td><a href="track.php?track_id=<?php echo urlencode($overdue_doc['voucher_code']); ?>"><?php echo htmlspecialchars($overdue_doc['voucher_code']); ?></a></td>
+                                    <td><?php echo htmlspecialchars($overdue_doc['document_type']); ?></td>
+                                    <td><?php echo date('M d, Y', strtotime($overdue_doc['arta_deadline'])); ?></td>
+                                    <td><?php echo $days_overdue; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p class="overdue-breakdown-empty">There are no overdue active documents in this view.</p>
+            <?php endif; ?>
+        </dialog>
 
         <?php echo build_calendar($month, $year, $date_highlights); ?>
 

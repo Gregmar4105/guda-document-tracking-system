@@ -221,6 +221,127 @@ body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-gray); ma
 .legend-item .color-box.orange { background-color: #ffedd5; border: 1px solid #f59e0b; }
 .legend-item .color-box.red { background-color: #fee2e2; border: 1px solid #ef4444; }
 
+.overdue-rate-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin: 0 0 20px;
+    padding: 16px 18px;
+    border: 1px solid #fecaca;
+    border-left: 5px solid #dc2626;
+    border-radius: 8px;
+    background: #fffafa;
+}
+.overdue-rate-label,
+.overdue-rate-caption {
+    display: block;
+}
+.overdue-rate-label {
+    color: var(--text-dark);
+    font-weight: 700;
+}
+.overdue-rate-caption {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.overdue-rate-trigger {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #b91c1c;
+    font: inherit;
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-align: right;
+    cursor: pointer;
+}
+.overdue-rate-trigger span {
+    display: block;
+    margin-top: 2px;
+    color: var(--naap-navy);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: underline;
+}
+.overdue-rate-trigger:hover span,
+.overdue-rate-trigger:focus-visible span {
+    color: var(--naap-navy-hover);
+}
+.overdue-breakdown-dialog {
+    width: min(900px, calc(100% - 32px));
+    max-width: 900px;
+    max-height: min(80vh, 700px);
+    padding: 24px;
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    color: var(--text-dark);
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+}
+.overdue-breakdown-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.55);
+}
+.overdue-breakdown-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--naap-gold);
+}
+.overdue-breakdown-header p {
+    margin: 0 0 5px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.overdue-breakdown-header h2 {
+    margin: 0;
+    color: var(--naap-navy);
+    font-size: 1.3rem;
+}
+.overdue-breakdown-close {
+    padding: 8px 12px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text-dark);
+    font: inherit;
+    cursor: pointer;
+}
+.overdue-breakdown-summary {
+    margin: 16px 0;
+    color: var(--text-muted);
+}
+.overdue-breakdown-table-wrap {
+    overflow-x: auto;
+}
+.overdue-breakdown-table th,
+.overdue-breakdown-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-light);
+    text-align: left;
+}
+.overdue-breakdown-table th {
+    background: #f8fafc;
+    color: var(--naap-navy);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+.overdue-breakdown-table a {
+    color: var(--naap-navy);
+    font-weight: 700;
+}
+.overdue-breakdown-empty {
+    padding: 24px;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: var(--text-muted);
+    text-align: center;
+}
+
 /* Tooltip for Department Head Metric */
 .metric-card-hover {
     position: relative; /* Needed for tooltip positioning */

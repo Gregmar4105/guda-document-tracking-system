@@ -89,6 +89,46 @@ function test_data_manager_delete_record($conn, $entity, $record_id) {
         return;
     }
 
+    if ($entity === 'archived_voucher') {
+        $stmt = $conn->prepare('SELECT voucher_code FROM vouchers_archive WHERE voucher_code = ? FOR UPDATE');
+        if (!$stmt) {
+            throw new RuntimeException('Could not prepare the archived voucher lookup.');
+        }
+        $stmt->bind_param('s', $record_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Could not load archived voucher ' . $record_id . '.');
+        }
+        $found = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$found) {
+            throw new RuntimeException('Archived voucher ' . $record_id . ' was not found.');
+        }
+
+        $stmt = $conn->prepare('DELETE FROM audit_logs_archive WHERE voucher_code = ?');
+        if (!$stmt) {
+            throw new RuntimeException('Could not prepare archived audit-history cleanup.');
+        }
+        $stmt->bind_param('s', $record_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete archived audit history for voucher ' . $record_id . '.');
+        }
+        $stmt->close();
+
+        $stmt = $conn->prepare('DELETE FROM vouchers_archive WHERE voucher_code = ?');
+        if (!$stmt) {
+            throw new RuntimeException('Could not prepare archived voucher deletion.');
+        }
+        $stmt->bind_param('s', $record_id);
+        if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+            $stmt->close();
+            throw new RuntimeException('Could not delete archived voucher ' . $record_id . '.');
+        }
+        $stmt->close();
+        return;
+    }
+
     if ($entity === 'document_type' || $entity === 'voucher_type') {
         if (!ctype_digit($record_id) || (int)$record_id < 1) {
             throw new RuntimeException('Invalid type ID.');
@@ -970,6 +1010,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $vouchers = [];
+$archived_vouchers = [];
 $document_types = [];
 $voucher_types = [];
 $users = [];
@@ -1019,6 +1060,18 @@ try {
     ");
     while ($row = $result->fetch_assoc()) {
         $vouchers[] = $row;
+    }
+
+    $result = $conn->query("
+        SELECT va.voucher_code, va.document_title, va.status, va.date_submitted,
+               u.full_name AS requestor_name
+        FROM vouchers_archive va
+        LEFT JOIN users u ON u.user_id = va.requestor_id
+        ORDER BY (va.voucher_code LIKE 'TEST-%') DESC, va.date_submitted DESC
+        LIMIT 200
+    ");
+    while ($row = $result->fetch_assoc()) {
+        $archived_vouchers[] = $row;
     }
 
     $result = $conn->query("
@@ -1122,7 +1175,7 @@ $escape = static function ($value) {
     </header>
 
     <div class="warning">
-        <strong>Use only in a test environment.</strong> Deletions are permanent. Test documents are prefixed with [TEST]. The HR DSS demo action below creates three intentionally overdue documents assigned to the HR Head; delete the generated TEST-DSS vouchers from Live vouchers when finished. Other test documents created here do not generate workflow actions or notifications. The deadline processor can mark overdue live documents Lapsed and issue normal alerts. Up to 200 live vouchers are listed (test documents first), and the 200 newest notifications are shown; archived vouchers are not shown or deleted.
+        <strong>Use only in a test environment.</strong> Deletions are permanent. Test documents are prefixed with [TEST]. The HR DSS demo action below creates three intentionally overdue documents assigned to the HR Head; delete the generated TEST-DSS vouchers from Live vouchers when finished. Other test documents created here do not generate workflow actions or notifications. The deadline processor can mark overdue live documents Lapsed and issue normal alerts. Up to 200 live vouchers and 200 archived vouchers are listed (test documents first); deleting an archived voucher also permanently deletes its archived audit history. The 200 newest notifications are shown.
     </div>
 
     <?php if ($notice): ?>
@@ -1230,6 +1283,15 @@ $escape = static function ($value) {
                 $escape($row['date_submitted'])
             ];
         }, ['Voucher ID', 'Title', 'Requestor', 'Status', 'Submitted']],
+        ['Archived vouchers', $archived_vouchers, 'archived_voucher', static function ($row) use ($escape) {
+            return [
+                $escape($row['voucher_code']),
+                $escape(display_document_title($row['document_title'])),
+                $escape($row['requestor_name'] ?? 'Unknown'),
+                $escape($row['status']),
+                $escape($row['date_submitted'])
+            ];
+        }, ['Voucher ID', 'Title', 'Requestor', 'Status', 'Submitted']],
         ['Document types', $document_types, 'document_type', static function ($row) use ($escape) {
             return [
                 $escape($row['id']),
@@ -1273,7 +1335,7 @@ $escape = static function ($value) {
             <?php if (empty($section[1])): ?>
                 <p class="muted">No records.</p>
             <?php else: ?>
-                <form method="POST" class="bulk-delete-form" onsubmit="return confirm('Permanently delete all selected records in this section? This cannot be undone.');">
+                <form method="POST" class="bulk-delete-form" onsubmit="return confirm('<?php echo $section[2] === 'archived_voucher' ? 'Permanently delete the selected archived vouchers and their archived audit history? This cannot be undone.' : 'Permanently delete all selected records in this section? This cannot be undone.'; ?>');">
                 <input type="hidden" name="csrf_token" value="<?php echo $escape($_SESSION['test_data_manager_csrf']); ?>">
                 <input type="hidden" name="entity" value="<?php echo $escape($section[2]); ?>">
                 <div class="bulk-actions">
@@ -1303,7 +1365,7 @@ $escape = static function ($value) {
                             ?>
                             <tr>
                                 <td>
-                                    <input class="select-record record-checkbox" type="checkbox" name="record_ids[]" value="<?php echo $escape($section[2] === 'voucher' ? $row['voucher_code'] : ($section[2] === 'user' ? $row['user_id'] : $row['id'])); ?>" <?php echo $protected ? 'disabled title="This record is protected or still referenced."' : ''; ?> aria-label="Select record">
+                                    <input class="select-record record-checkbox" type="checkbox" name="record_ids[]" value="<?php echo $escape(in_array($section[2], ['voucher', 'archived_voucher'], true) ? $row['voucher_code'] : ($section[2] === 'user' ? $row['user_id'] : $row['id'])); ?>" <?php echo $protected ? 'disabled title="This record is protected or still referenced."' : ''; ?> aria-label="Select record">
                                 </td>
                                 <?php foreach ($section[3]($row) as $cell): ?><td><?php echo $cell; ?></td><?php endforeach; ?>
                             </tr>

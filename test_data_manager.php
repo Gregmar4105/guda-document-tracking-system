@@ -414,6 +414,375 @@ function test_data_manager_create_hr_dss_demo($conn) {
     return $created_codes;
 }
 
+function test_data_manager_add_business_days($date, $days, $holidays) {
+    $current = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$current) {
+        throw new RuntimeException('Could not calculate a simulated business-day date.');
+    }
+
+    $added = 0;
+    while ($added < $days) {
+        $current = $current->modify('+1 day');
+        $weekday = (int)$current->format('N');
+        if ($weekday < 6 && !isset($holidays[$current->format('Y-m-d')])) {
+            $added++;
+        }
+    }
+    return $current->format('Y-m-d');
+}
+
+function test_data_manager_create_simulated_20day_demo($conn) {
+    $account_specs = [
+        'accounting_head' => ['acct_head', 'Accounting Office'],
+        'budget_head' => ['budgethead', 'Budget Office'],
+        'cash_head' => ['disbursinghead', 'Cash Services – Collecting Office'],
+        'cash_staff' => ['disbursingstaff', 'Cash Services – Collecting Office'],
+        'cau_head' => ['Andrio Guda', 'Cultural Affairs Unit'],
+        'cau_staff' => ['caustaff', 'Cultural Affairs Unit'],
+        'hr_head' => ['hr_head', 'Human Resource Management Services Division']
+    ];
+    $accounts = [];
+    $account_stmt = $conn->prepare('SELECT user_id, username, full_name, role FROM users WHERE username = ? AND role = ? LIMIT 1 FOR UPDATE');
+    if (!$account_stmt) {
+        throw new RuntimeException('Could not prepare the simulated account checks.');
+    }
+    foreach ($account_specs as $key => $spec) {
+        $account_stmt->bind_param('ss', $spec[0], $spec[1]);
+        if (!$account_stmt->execute()) {
+            $account_stmt->close();
+            throw new RuntimeException('Could not verify the configured test accounts.');
+        }
+        $account = $account_stmt->get_result()->fetch_assoc();
+        if (!$account) {
+            $account_stmt->close();
+            throw new RuntimeException('The account "' . $spec[0] . '" is unavailable. No simulated records were created.');
+        }
+        $accounts[$key] = $account;
+    }
+    $account_stmt->close();
+
+    $types = [];
+    $type_result = $conn->query("
+        SELECT id, name, arta_level
+        FROM document_types
+        WHERE is_active = 1 AND workflow_type = 'Approval'
+          AND arta_level IN ('Simple', 'Complex', 'Highly Technical')
+        ORDER BY arta_level, name
+    ");
+    if (!$type_result) {
+        throw new RuntimeException('Could not load document types for the simulated dataset.');
+    }
+    while ($type = $type_result->fetch_assoc()) {
+        $types[] = $type;
+    }
+    $type_result->close();
+    if (empty($types)) {
+        throw new RuntimeException('At least one active Simple or Complex approval document type is required.');
+    }
+
+    $holidays = [];
+    $holiday_result = $conn->query('SELECT holiday_date FROM holidays');
+    if (!$holiday_result) {
+        throw new RuntimeException('Could not load holidays for the simulated business-day schedule.');
+    }
+    while ($holiday = $holiday_result->fetch_assoc()) {
+        $holidays[$holiday['holiday_date']] = true;
+    }
+    $holiday_result->close();
+
+    $last_day = new DateTimeImmutable('yesterday');
+    while ((int)$last_day->format('N') >= 6 || isset($holidays[$last_day->format('Y-m-d')])) {
+        $last_day = $last_day->modify('-1 day');
+    }
+    $submission_dates = [];
+    $cursor = $last_day;
+    while (count($submission_dates) < 20) {
+        $date = $cursor->format('Y-m-d');
+        if ((int)$cursor->format('N') < 6 && !isset($holidays[$date])) {
+            $submission_dates[] = $date;
+        }
+        $cursor = $cursor->modify('-1 day');
+    }
+    $submission_dates = array_reverse($submission_dates);
+    $period_start = $submission_dates[0];
+    $period_end = end($submission_dates);
+    $as_of_date = (new DateTimeImmutable('today'))->format('Y-m-d');
+
+    $routes = [
+        ['cau_staff', 'hr_head'],
+        ['budget_head', 'accounting_head', 'cash_staff'],
+        ['cau_head', 'budget_head', 'accounting_head'],
+        ['accounting_head', 'cash_head'],
+        ['hr_head', 'budget_head', 'cash_head'],
+        ['cau_head', 'accounting_head', 'cash_staff']
+    ];
+    $requestor_keys = ['cau_head', 'cau_head', 'hr_head', 'cau_head', 'cau_staff', 'hr_head'];
+    $current_user_id = (int)($_SESSION['user_id'] ?? 0);
+    if ($current_user_id < 1) {
+        throw new RuntimeException('Could not identify the administrator creating the simulated dataset.');
+    }
+
+    $voucher_stmt = $conn->prepare("
+        INSERT INTO vouchers
+            (voucher_code, requestor_id, document_title, doc_type_id, date_submitted,
+             purpose, status, workflow_type, current_stage_index, custom_workflow, arta_deadline)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'Approval', ?, ?, ?)
+    ");
+    $log_stmt = $conn->prepare("
+        INSERT INTO audit_logs
+            (voucher_code, department, action_taken, remarks, processed_by_user_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+    if (!$voucher_stmt || !$log_stmt) {
+        if ($voucher_stmt) {
+            $voucher_stmt->close();
+        }
+        if ($log_stmt) {
+            $log_stmt->close();
+        }
+        throw new RuntimeException('Could not prepare the simulated voucher and activity records.');
+    }
+
+    $run_id = date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(2)));
+    $created_codes = [];
+    $dataset_rows = [];
+    try {
+        foreach ($submission_dates as $index => $submitted_date) {
+            $route_definitions = $routes[$index % count($routes)];
+            $route_accounts = [];
+            $route_steps = [];
+            foreach ($route_definitions as $account_key) {
+                $account = $accounts[$account_key];
+                $route_accounts[] = $account;
+                $route_steps[] = 'ACCOUNT:' . (int)$account['user_id'];
+            }
+
+            $desired_level = ($index % 10 === 0)
+                ? 'Highly Technical'
+                : (($index % 4 === 0) ? 'Complex' : 'Simple');
+            $type_pool = array_values(array_filter($types, static function ($type) use ($desired_level) {
+                return $type['arta_level'] === $desired_level;
+            }));
+            if (empty($type_pool)) {
+                $type_pool = $types;
+            }
+            $type = $type_pool[$index % count($type_pool)];
+            $deadline = calculateARTADeadline($submitted_date, $type['arta_level'], $conn);
+            if (!$deadline) {
+                throw new RuntimeException('ARTA deadline calculation is disabled or unavailable. Enable ARTA deadline rules before creating this dataset.');
+            }
+
+            $route_count = count($route_accounts);
+            $scenario = $index % 7;
+            $wants_late_decision = in_array($scenario, [0, 2, 5, 6], true);
+            $is_return = $scenario === 2;
+            $is_decline = $scenario === 6;
+            $late_stage_index = $index % $route_count;
+            $late_days = 1 + ($index % 2);
+            $late_decision_date = test_data_manager_add_business_days($deadline, $late_days, $holidays);
+            $late_final_date = test_data_manager_add_business_days($late_decision_date, $route_count - 1 - $late_stage_index, $holidays);
+            $elapsed_business_days = count($submission_dates) - 1 - $index;
+            $active_stage_index = min($route_count - 1, $elapsed_business_days);
+            $active_received_date = test_data_manager_add_business_days($submitted_date, $active_stage_index, $holidays);
+            $use_late_decision = $wants_late_decision
+                && $deadline < $as_of_date
+                && $late_final_date <= $period_end;
+            $is_active = $scenario === 3 || ($wants_late_decision && !$use_late_decision);
+            $is_late_active = $is_active && $deadline < $as_of_date && $active_received_date <= $deadline;
+
+            $events = [];
+            $processed_stages = 0;
+            $status = 'Processing';
+            $current_stage_index = $route_count;
+            $outcome = 'In progress';
+            $completion_date = null;
+
+            if ($use_late_decision) {
+                $processed_stages = $is_return || $is_decline ? $late_stage_index + 1 : $route_count;
+                $status = $is_return ? 'Returned' : ($is_decline ? 'Rejected' : 'Ready for Release');
+                $current_stage_index = $processed_stages;
+                $outcome = $is_return ? 'Returned after deadline' : ($is_decline ? 'Declined after deadline' : 'Completed late');
+                for ($stage_index = 0; $stage_index < $processed_stages; $stage_index++) {
+                    if ($stage_index < $late_stage_index) {
+                        $event_date = test_data_manager_add_business_days($submitted_date, $stage_index, $holidays);
+                        $received_date = $event_date;
+                    } elseif ($stage_index === $late_stage_index) {
+                        $event_date = $late_decision_date;
+                        $received_date = test_data_manager_add_business_days($submitted_date, $stage_index, $holidays);
+                    } else {
+                        $event_date = test_data_manager_add_business_days($late_decision_date, $stage_index - $late_stage_index, $holidays);
+                        $received_date = $event_date;
+                    }
+                    $action = ($stage_index === $late_stage_index && $is_return)
+                        ? 'RETURNED'
+                        : (($stage_index === $late_stage_index && $is_decline) ? 'DECLINED' : 'Accepted');
+                    $events[] = [
+                        'stage_index' => $stage_index,
+                        'received_at' => $received_date . ' 09:00:00',
+                        'decision_at' => $event_date . ' 15:00:00',
+                        'action' => $action
+                    ];
+                }
+                $completion_date = end($events)['decision_at'];
+            } elseif (!$is_active) {
+                $final_date = test_data_manager_add_business_days($submitted_date, $route_count - 1, $holidays);
+                if ($final_date <= $period_end && $final_date <= $deadline) {
+                    $processed_stages = $route_count;
+                    $status = 'Ready for Release';
+                    $outcome = 'Completed on time';
+                    for ($stage_index = 0; $stage_index < $route_count; $stage_index++) {
+                        $event_date = test_data_manager_add_business_days($submitted_date, $stage_index, $holidays);
+                        $events[] = [
+                            'stage_index' => $stage_index,
+                            'received_at' => $event_date . ' 09:00:00',
+                            'decision_at' => $event_date . ' 15:00:00',
+                            'action' => 'Accepted'
+                        ];
+                    }
+                    $completion_date = $final_date . ' 15:00:00';
+                } else {
+                    $is_active = true;
+                    $is_late_active = $deadline < $as_of_date && $active_received_date <= $deadline;
+                    $outcome = $is_late_active ? 'Overdue and in progress' : 'In progress within deadline';
+                }
+            } else {
+                $outcome = $is_late_active ? 'Overdue and in progress' : 'In progress within deadline';
+            }
+
+            if ($is_active) {
+                $current_stage_index = $active_stage_index + 1;
+                for ($stage_index = 0; $stage_index < $active_stage_index; $stage_index++) {
+                    $event_date = test_data_manager_add_business_days($submitted_date, $stage_index, $holidays);
+                    $events[] = [
+                        'stage_index' => $stage_index,
+                        'received_at' => $event_date . ' 09:00:00',
+                        'decision_at' => $event_date . ' 15:00:00',
+                        'action' => 'Accepted'
+                    ];
+                }
+                $events[] = [
+                    'stage_index' => $active_stage_index,
+                    'received_at' => $active_received_date . ' 09:00:00',
+                    'decision_at' => null,
+                    'action' => null
+                ];
+            }
+
+            $route_json = json_encode($route_steps);
+            if ($route_json === false) {
+                throw new RuntimeException('Could not encode a simulated routing sequence.');
+            }
+            $voucher_code = 'TEST-SIM20-' . $run_id . '-' . str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT);
+            $title = '[SIMULATED TEST] ' . $type['name'] . ' - Case ' . str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT);
+            $purpose = 'SIMULATED TEST DATA ONLY — generated for a 20-business-day capstone system demonstration; not an actual NAAP transaction.';
+            $submitted_at = $submitted_date . ' 08:30:00';
+            $doc_type_id = (int)$type['id'];
+            $requestor_id = (int)$accounts[$requestor_keys[$index % count($requestor_keys)]]['user_id'];
+            $voucher_stmt->bind_param(
+                'sisisssiss',
+                $voucher_code,
+                $requestor_id,
+                $title,
+                $doc_type_id,
+                $submitted_at,
+                $purpose,
+                $status,
+                $current_stage_index,
+                $route_json,
+                $deadline
+            );
+            if (!$voucher_stmt->execute()) {
+                throw new RuntimeException('Could not create simulated document ' . ($index + 1) . '.');
+            }
+            $created_codes[] = $voucher_code;
+
+            $activity_summary = [];
+            foreach ($events as $event) {
+                $actor = $route_accounts[$event['stage_index']];
+                $department = $actor['role'];
+                $remarks = 'SIMULATED TEST DATA ONLY — generated activity; not an actual user action.';
+                $receive_action = 'Scan-to-Receive';
+                $log_stmt->bind_param('ssssis', $voucher_code, $department, $receive_action, $remarks, $actor['user_id'], $event['received_at']);
+                if (!$log_stmt->execute()) {
+                    throw new RuntimeException('Could not create a simulated receipt activity record.');
+                }
+                $activity_summary[] = $event['received_at'] . ' received by ' . $actor['full_name'];
+
+                if ($event['action'] !== null) {
+                    $log_stmt->bind_param('ssssis', $voucher_code, $department, $event['action'], $remarks, $actor['user_id'], $event['decision_at']);
+                    if (!$log_stmt->execute()) {
+                        throw new RuntimeException('Could not create a simulated decision activity record.');
+                    }
+                    $activity_summary[] = $event['decision_at'] . ' ' . $event['action'] . ' by ' . $actor['full_name'];
+                }
+            }
+
+            $late_days_value = 0;
+            if ($completion_date !== null && $completion_date > ($deadline . ' 23:59:59')) {
+                $deadline_date = new DateTimeImmutable($deadline);
+                $decision_date = new DateTimeImmutable(substr($completion_date, 0, 10));
+                $late_days_value = (int)$deadline_date->diff($decision_date)->days;
+            } elseif ($is_late_active) {
+                $deadline_date = new DateTimeImmutable($deadline);
+                $today_date = new DateTimeImmutable($as_of_date);
+                $late_days_value = max(1, (int)$deadline_date->diff($today_date)->days);
+            }
+            $dataset_rows[] = [
+                'classification' => 'SIMULATED TEST DATA — NOT ACTUAL NAAP OPERATIONS',
+                'tracking_id' => $voucher_code,
+                'submission_date' => $submitted_date,
+                'document_type' => $type['name'],
+                'arta_level' => $type['arta_level'],
+                'arta_deadline' => $deadline,
+                'requesting_account' => $accounts[$requestor_keys[$index % count($requestor_keys)]]['full_name'],
+                'routing_accounts' => implode(' > ', array_map(static function ($account) {
+                    return $account['full_name'] . ' (' . $account['role'] . ')';
+                }, $route_accounts)),
+                'system_status' => $status,
+                'test_case_result' => $outcome,
+                'last_decision_or_activity' => $completion_date ?: end($events)['received_at'],
+                'end_to_end_days_after_deadline' => $late_days_value,
+                'activity_log_summary' => implode(' | ', $activity_summary)
+            ];
+        }
+    } finally {
+        $voucher_stmt->close();
+        $log_stmt->close();
+    }
+
+    return [
+        'tracking_ids' => $created_codes,
+        'rows' => $dataset_rows,
+        'period_start' => $period_start,
+        'period_end' => $period_end
+    ];
+}
+
+if (isset($_GET['download_simulated_dataset'])) {
+    $dataset = $_SESSION['test_data_manager_simulated_dataset'] ?? null;
+    if (!is_array($dataset) || empty($dataset['rows'])) {
+        http_response_code(404);
+        exit('No simulated dataset is available in this session. Generate it from the test-data manager first.');
+    }
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="simulated_20_business_day_test_data.csv"');
+    $output = fopen('php://output', 'w');
+    if ($output === false) {
+        throw new RuntimeException('Could not open the simulated dataset download stream.');
+    }
+    fwrite($output, "\xEF\xBB\xBF");
+    fputcsv($output, ['DATA CLASSIFICATION', 'SIMULATED TEST DATA — NOT ACTUAL NAAP OPERATIONS']);
+    fputcsv($output, ['TEST PERIOD', $dataset['period_start'] . ' through ' . $dataset['period_end'] . ' (20 business days)']);
+    fputcsv($output, []);
+    fputcsv($output, array_keys($dataset['rows'][0]));
+    foreach ($dataset['rows'] as $row) {
+        fputcsv($output, array_values($row));
+    }
+    fclose($output);
+    exit();
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf_token = $_POST['csrf_token'] ?? '';
     if (!is_string($csrf_token) || !hash_equals($_SESSION['test_data_manager_csrf'], $csrf_token)) {
@@ -424,6 +793,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $transaction_started = false;
     try {
+        if (($_POST['action'] ?? '') === 'create_simulated_20day_demo') {
+            $conn->begin_transaction();
+            $transaction_started = true;
+            $dataset = test_data_manager_create_simulated_20day_demo($conn);
+            $conn->commit();
+            $transaction_started = false;
+            $_SESSION['test_data_manager_simulated_dataset'] = [
+                'rows' => $dataset['rows'],
+                'period_start' => $dataset['period_start'],
+                'period_end' => $dataset['period_end']
+            ];
+            $_SESSION['test_data_manager_notice'] = [
+                'type' => 'success',
+                'message' => 'Created 20 clearly labeled simulated test documents for ' . $dataset['period_start'] . ' through ' . $dataset['period_end'] . '. Activity is marked as generated test data and is not actual account activity.',
+                'simulated_dataset_available' => true
+            ];
+            header('Location: test_data_manager.php');
+            exit();
+        }
+
         if (($_POST['action'] ?? '') === 'create_test_document') {
             $conn->begin_transaction();
             $transaction_started = true;
@@ -652,6 +1041,9 @@ $escape = static function ($value) {
 
     <?php if ($notice): ?>
         <div class="notice <?php echo $escape($notice['type']); ?>"><?php echo $escape($notice['message']); ?></div>
+        <?php if (!empty($notice['simulated_dataset_available'])): ?>
+            <p><a href="test_data_manager.php?download_simulated_dataset=1">Download paper-ready simulated dataset (CSV)</a></p>
+        <?php endif; ?>
         <?php if ($created_test_code): ?>
             <p><a href="track.php?track_id=<?php echo urlencode($created_test_code); ?>">Open this test document’s tracking page</a></p>
         <?php endif; ?>
@@ -659,6 +1051,19 @@ $escape = static function ($value) {
     <?php if ($load_error !== ''): ?>
         <div class="notice error"><?php echo $escape($load_error); ?></div>
     <?php endif; ?>
+
+    <section class="record-section">
+        <h2>20-business-day simulated workflow test</h2>
+        <p class="muted"><strong>Simulation only—not research observations or actual user activity.</strong> Creates 20 documents dated across 20 recent business days and realistic, backdated receipt/decision logs using the listed head and staff accounts. It uses available Simple, Complex, and Highly Technical document types. Scenarios include on-time completion, late approval, return, rejection, and documents still in progress. Every generated document and activity remark is explicitly labeled simulated. After creation, download a CSV suitable for a clearly identified simulated test-case appendix.</p>
+        <form method="POST" onsubmit="return confirm('Create 20 SIMULATED test documents and generated activity records attributed to the configured accounts? Use only a test database; these are not actual NAAP transactions.');">
+            <input type="hidden" name="csrf_token" value="<?php echo $escape($_SESSION['test_data_manager_csrf']); ?>">
+            <input type="hidden" name="action" value="create_simulated_20day_demo">
+            <button class="form-submit" type="submit">Generate 20-day simulated test data</button>
+        </form>
+        <?php if (!empty($_SESSION['test_data_manager_simulated_dataset']['rows'])): ?>
+            <p><a href="test_data_manager.php?download_simulated_dataset=1">Download the latest simulated dataset CSV</a></p>
+        <?php endif; ?>
+    </section>
 
     <section class="record-section">
         <h2>HR Head Late Processing DSS demo</h2>

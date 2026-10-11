@@ -431,6 +431,19 @@ function test_data_manager_add_business_days($date, $days, $holidays) {
     return $current->format('Y-m-d');
 }
 
+function test_data_manager_insert_simulated_notification($stmt, $user_id, $message, $link, $created_at) {
+    $user_id = (int)$user_id;
+    $message = 'SIMULATED TEST DATA ONLY — ' . $message;
+    $link = (string)$link;
+    if ($user_id < 1) {
+        throw new RuntimeException('A simulated notification has an invalid recipient.');
+    }
+    $stmt->bind_param('isss', $user_id, $message, $link, $created_at);
+    if (!$stmt->execute()) {
+        throw new RuntimeException('Could not create a simulated notification: ' . $stmt->error);
+    }
+}
+
 function test_data_manager_create_simulated_20day_demo($conn) {
     $account_specs = [
         'accounting_head' => ['acct_head', 'Accounting Office'],
@@ -533,14 +546,21 @@ function test_data_manager_create_simulated_20day_demo($conn) {
             (voucher_code, department, action_taken, remarks, processed_by_user_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
     ");
-    if (!$voucher_stmt || !$log_stmt) {
+    $notification_stmt = $conn->prepare("
+        INSERT INTO notifications (user_id, message, link, created_at)
+        VALUES (?, ?, ?, ?)
+    ");
+    if (!$voucher_stmt || !$log_stmt || !$notification_stmt) {
         if ($voucher_stmt) {
             $voucher_stmt->close();
         }
         if ($log_stmt) {
             $log_stmt->close();
         }
-        throw new RuntimeException('Could not prepare the simulated voucher and activity records.');
+        if ($notification_stmt) {
+            $notification_stmt->close();
+        }
+        throw new RuntimeException('Could not prepare the simulated voucher, activity, and notification records.');
     }
 
     $run_id = date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(2)));
@@ -697,6 +717,28 @@ function test_data_manager_create_simulated_20day_demo($conn) {
             $created_codes[] = $voucher_code;
 
             $activity_summary = [];
+            $notification_summary = [];
+            $track_link = 'track.php?track_id=' . urlencode($voucher_code);
+            $queue_link = 'queue.php?select_id=' . urlencode($voucher_code);
+            $submission_message = "Your document {$voucher_code} has been submitted and is pending review.";
+            test_data_manager_insert_simulated_notification(
+                $notification_stmt,
+                $requestor_id,
+                $submission_message,
+                $track_link,
+                $submitted_at
+            );
+            $notification_summary[] = $submitted_at . ' submission notice to ' . $accounts[$requestor_keys[$index % count($requestor_keys)]]['full_name'];
+            $first_route_message = "Document {$voucher_code} has been submitted and is routed to your workflow stage.";
+            test_data_manager_insert_simulated_notification(
+                $notification_stmt,
+                $route_accounts[0]['user_id'],
+                $first_route_message,
+                $queue_link,
+                $submitted_at
+            );
+            $notification_summary[] = $submitted_at . ' routing notice to ' . $route_accounts[0]['full_name'];
+
             foreach ($events as $event) {
                 $actor = $route_accounts[$event['stage_index']];
                 $department = $actor['role'];
@@ -707,6 +749,14 @@ function test_data_manager_create_simulated_20day_demo($conn) {
                     throw new RuntimeException('Could not create a simulated receipt activity record.');
                 }
                 $activity_summary[] = $event['received_at'] . ' received by ' . $actor['full_name'];
+                test_data_manager_insert_simulated_notification(
+                    $notification_stmt,
+                    $requestor_id,
+                    "Your document {$voucher_code} has been received by {$department}.",
+                    $track_link,
+                    $event['received_at']
+                );
+                $notification_summary[] = $event['received_at'] . ' receipt notice to ' . $accounts[$requestor_keys[$index % count($requestor_keys)]]['full_name'];
 
                 if ($event['action'] !== null) {
                     $log_stmt->bind_param('ssssis', $voucher_code, $department, $event['action'], $remarks, $actor['user_id'], $event['decision_at']);
@@ -714,6 +764,40 @@ function test_data_manager_create_simulated_20day_demo($conn) {
                         throw new RuntimeException('Could not create a simulated decision activity record.');
                     }
                     $activity_summary[] = $event['decision_at'] . ' ' . $event['action'] . ' by ' . $actor['full_name'];
+                    if ($event['action'] === 'Accepted' && $event['stage_index'] + 1 < $route_count) {
+                        $requestor_message = "Your document {$voucher_code} was processed by {$department} and advanced to the next routing stage.";
+                        $next_account = $route_accounts[$event['stage_index'] + 1];
+                        $route_message = "Document {$voucher_code} has been processed by {$department} and is routed to your stage.";
+                        test_data_manager_insert_simulated_notification(
+                            $notification_stmt,
+                            $requestor_id,
+                            $requestor_message,
+                            $track_link,
+                            $event['decision_at']
+                        );
+                        test_data_manager_insert_simulated_notification(
+                            $notification_stmt,
+                            $next_account['user_id'],
+                            $route_message,
+                            $queue_link,
+                            $event['decision_at']
+                        );
+                        $notification_summary[] = $event['decision_at'] . ' processing notice to requestor and ' . $next_account['full_name'];
+                    } else {
+                        $decision_notice = $event['action'] === 'Accepted'
+                            ? "Your document {$voucher_code} has completed approval and is ready for release."
+                            : ($event['action'] === 'RETURNED'
+                                ? "Your document {$voucher_code} was returned by {$department}."
+                                : "Your document {$voucher_code} was rejected by {$department}.");
+                        test_data_manager_insert_simulated_notification(
+                            $notification_stmt,
+                            $requestor_id,
+                            $decision_notice,
+                            $track_link,
+                            $event['decision_at']
+                        );
+                        $notification_summary[] = $event['decision_at'] . ' decision notice to ' . $accounts[$requestor_keys[$index % count($requestor_keys)]]['full_name'];
+                    }
                 }
             }
 
@@ -742,12 +826,14 @@ function test_data_manager_create_simulated_20day_demo($conn) {
                 'test_case_result' => $outcome,
                 'last_decision_or_activity' => $completion_date ?: end($events)['received_at'],
                 'end_to_end_days_after_deadline' => $late_days_value,
-                'activity_log_summary' => implode(' | ', $activity_summary)
+                'activity_log_summary' => implode(' | ', $activity_summary),
+                'simulated_notification_summary' => implode(' | ', $notification_summary)
             ];
         }
     } finally {
         $voucher_stmt->close();
         $log_stmt->close();
+        $notification_stmt->close();
     }
 
     return [
@@ -806,7 +892,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             $_SESSION['test_data_manager_notice'] = [
                 'type' => 'success',
-                'message' => 'Created 20 clearly labeled simulated test documents for ' . $dataset['period_start'] . ' through ' . $dataset['period_end'] . '. Activity is marked as generated test data and is not actual account activity.',
+                'message' => 'Created 20 clearly labeled simulated test documents and corresponding submission, receipt, and processing notifications for ' . $dataset['period_start'] . ' through ' . $dataset['period_end'] . '. These are generated test records, not actual account activity.',
                 'simulated_dataset_available' => true
             ];
             header('Location: test_data_manager.php');
@@ -1054,8 +1140,8 @@ $escape = static function ($value) {
 
     <section class="record-section">
         <h2>20-business-day simulated workflow test</h2>
-        <p class="muted"><strong>Simulation only—not research observations or actual user activity.</strong> Creates 20 documents dated across 20 recent business days and realistic, backdated receipt/decision logs using the listed head and staff accounts. It uses available Simple, Complex, and Highly Technical document types. Scenarios include on-time completion, late approval, return, rejection, and documents still in progress. Every generated document and activity remark is explicitly labeled simulated. After creation, download a CSV suitable for a clearly identified simulated test-case appendix.</p>
-        <form method="POST" onsubmit="return confirm('Create 20 SIMULATED test documents and generated activity records attributed to the configured accounts? Use only a test database; these are not actual NAAP transactions.');">
+        <p class="muted"><strong>Simulation only—not research observations or actual user activity.</strong> Creates 20 documents dated across 20 recent business days, backdated receipt/decision logs, and corresponding submission, receipt, requestor, and next-routing-stage notifications using the listed head and staff accounts. It uses available Simple, Complex, and Highly Technical document types. Scenarios include on-time completion, late approval, return, rejection, and documents still in progress. Every generated document, activity remark, and notification is explicitly labeled simulated. After creation, download a CSV suitable for a clearly identified simulated test-case appendix.</p>
+        <form method="POST" onsubmit="return confirm('Create 20 SIMULATED test documents, generated activity records, and corresponding notifications attributed to the configured accounts? Use only a test database; these are not actual NAAP transactions.');">
             <input type="hidden" name="csrf_token" value="<?php echo $escape($_SESSION['test_data_manager_csrf']); ?>">
             <input type="hidden" name="action" value="create_simulated_20day_demo">
             <button class="form-submit" type="submit">Generate 20-day simulated test data</button>

@@ -152,39 +152,43 @@ if (isset($_GET['receive_id']) && !empty($_GET['receive_id'])) {
 
         // If all checks pass, proceed with receiving.
         if (empty($error_msg)) {
-            $recv_stmt = $conn->prepare("INSERT INTO audit_logs (voucher_code, department, action_taken, remarks, processed_by_user_id) VALUES (?, ?, 'Scan-to-Receive', 'Physical document received at station', ?)");
-            $recv_stmt->bind_param("ssi", $receive_id, $dept_role, $user_id);
-            if ($recv_stmt->execute()) {
-                $success_msg = "Voucher <strong>$receive_id</strong> from <strong>$requestor_name</strong> successfully received.<br><span style='font-size: 0.9rem;'>It is now pending in the Approval Queue.</span>";
-
-                // Ensure voucher is marked as 'Processing' so dashboards/ARTA include it
-                $update_v_stmt = $conn->prepare("UPDATE vouchers SET status = 'Processing' WHERE voucher_code = ?");
-                if ($update_v_stmt) {
-                    $update_v_stmt->bind_param("s", $receive_id);
-                    $update_v_stmt->execute();
-                    $update_v_stmt->close();
+            $conn->begin_transaction();
+            try {
+                $recv_stmt = $conn->prepare("INSERT INTO audit_logs (voucher_code, department, action_taken, remarks, processed_by_user_id) VALUES (?, ?, 'Scan-to-Receive', 'Physical document received at station', ?)");
+                if (!$recv_stmt) {
+                    throw new RuntimeException('Could not prepare the document receipt log: ' . $conn->error);
                 }
+                $recv_stmt->bind_param("ssi", $receive_id, $dept_role, $user_id);
+                if (!$recv_stmt->execute()) {
+                    throw new RuntimeException('Could not record the document receipt: ' . $recv_stmt->error);
+                }
+                $recv_stmt->close();
 
-                // Notify the requestor that their document has been physically received
+                $update_v_stmt = $conn->prepare("UPDATE vouchers SET status = 'Processing' WHERE voucher_code = ?");
+                if (!$update_v_stmt) {
+                    throw new RuntimeException('Could not prepare the document status update: ' . $conn->error);
+                }
+                $update_v_stmt->bind_param("s", $receive_id);
+                if (!$update_v_stmt->execute()) {
+                    throw new RuntimeException('Could not update document status: ' . $update_v_stmt->error);
+                }
+                $update_v_stmt->close();
+
                 if ($requestor_id) {
                     $notif_message = "Your document " . $receive_id . " has been received by the " . $dept_role . " office and is now in their queue.";
                     $notif_link = "track.php?track_id=" . urlencode($receive_id);
-                    
-                    // Call notification function if it exists
-                    if (function_exists('create_notification')) {
-                        create_notification($conn, $requestor_id, $notif_message, $notif_link);
-                    } else {
-                        // Fallback direct insert if function is not globally defined
-                        $notif_stmt = $conn->prepare("INSERT INTO notifications (user_id, voucher_code, message) VALUES (?, ?, ?)");
-                        if ($notif_stmt) {
-                            $notif_stmt->bind_param("iss", $requestor_id, $receive_id, $notif_message);
-                            $notif_stmt->execute();
-                            $notif_stmt->close();
-                        }
+                    if (!create_notification($conn, $requestor_id, $notif_message, $notif_link)) {
+                        throw new RuntimeException('Could not notify the document requestor after receipt.');
                     }
                 }
+
+                $conn->commit();
+                $success_msg = "Voucher <strong>$receive_id</strong> from <strong>$requestor_name</strong> successfully received.<br><span style='font-size: 0.9rem;'>It is now pending in the Approval Queue.</span>";
+            } catch (Throwable $e) {
+                $conn->rollback();
+                error_log('Document receipt notification/transaction failed for ' . $receive_id . ': ' . $e->getMessage());
+                $error_msg = 'The document receipt could not be completed. Please try again or contact the system administrator.';
             }
-            $recv_stmt->close();
         }
     } else {
         $error_msg = "Voucher not found in the database.";

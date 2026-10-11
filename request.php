@@ -300,35 +300,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 if (isset($custom_workflow_arr[$next_stage_index_0_based])) {
                     $next_dept = $custom_workflow_arr[$next_stage_index_0_based];
-                    
-                    // Special handling: allow routing to a specific user account using the prefix 'ACCOUNT:<user_id>'
-                    if (is_string($next_dept) && strpos($next_dept, 'ACCOUNT:') === 0) {
-                        $account_user_id = intval(substr($next_dept, strlen('ACCOUNT:')));
-                        // Notify that specific user directly
-                        $signatory_notif_message = "Heads up! A new document (" . $voucher_id . ") from " . $_SESSION['full_name'] . " is en route to your account.";
-                        $signatory_notif_link = "queue.php";
-                        create_notification($conn, $account_user_id, $signatory_notif_message, $signatory_notif_link);
-                    } else {
-                        $users_to_notify_stmt = null;
-
-                        if ($next_dept === 'Department Head') {
-                            // Notify only the head of the requestor's department
-                            $users_to_notify_stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ? AND is_head = 1");
-                            $users_to_notify_stmt->bind_param("s", $requestor_role);
-                        } else {
-                            // Use the global helper function to get the correct notification statement.
-                            $users_to_notify_stmt = prepare_notification_statement_for_department($conn, $next_dept);
-                        }
-
-                        if ($users_to_notify_stmt) {
-                            $users_to_notify_stmt->execute();
-                            $users_res = $users_to_notify_stmt->get_result();
-                            $signatory_notif_message = "Heads up! A new document (" . $voucher_id . ") from " . $_SESSION['full_name'] . " is en route to your office.";
-                            $signatory_notif_link = "queue.php";
-                            while ($user_row = $users_res->fetch_assoc()) { create_notification($conn, $user_row['user_id'], $signatory_notif_message, $signatory_notif_link); }
-                            $users_to_notify_stmt->close();
-                        }
-                    }
+                    $signatory_notif_message = "Heads up! A new document (" . $voucher_id . ") from " . $_SESSION['full_name'] . " is en route to your workflow stage.";
+                    notify_routing_stage($conn, $next_dept, $requestor_id, $signatory_notif_message, "queue.php?select_id=" . urlencode($voucher_id));
                 }
             }
         

@@ -38,7 +38,7 @@ $conn->autocommit(FALSE);
 
 try {
     // 1. Verify the voucher is at the correct stage for this user's department
-    $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type FROM vouchers WHERE voucher_code = ? FOR UPDATE");
+    $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type, requestor_id FROM vouchers WHERE voucher_code = ? FOR UPDATE");
     $verify_stmt->bind_param("s", $processed_id);
     $verify_stmt->execute();
     $verify_res = $verify_stmt->get_result();
@@ -48,6 +48,7 @@ try {
     }
     $voucher = $verify_res->fetch_assoc();
     $verify_stmt->close();
+    $requestor_id = (int)$voucher['requestor_id'];
 
     // Get the document's specific workflow or fallback to the global one
     $doc_workflow = json_decode($voucher['custom_workflow'], true);
@@ -121,9 +122,11 @@ try {
 
     // 2. Update the voucher based on the action
     $upd_stmt = null;
+    $is_final_stage = false;
     if ($action === "Accept") {
         // Check if this is the final stage
         if ($voucher['current_stage_index'] >= count($doc_workflow)) {
+            $is_final_stage = true;
             // This is the final stage. Determine the correct final status.
             $final_status_to_use = 'Ready for Release'; // Default for approval workflows
 
@@ -176,68 +179,34 @@ try {
     }
     $log_stmt->close();
 
-    // --- NEW: Notify the next recipient if the workflow advanced to another step ---
-    try {
-        $next_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type FROM vouchers WHERE voucher_code = ? LIMIT 1");
-        $next_stmt->bind_param("s", $processed_id);
-        $next_stmt->execute();
-        $next_res = $next_stmt->get_result();
-        $next_row = $next_res->fetch_assoc();
-        $next_stmt->close();
+    if ($action === 'Accept' && $is_final_stage) {
+        $requestor_message = "Good news! Your document " . $processed_id . " has been fully approved and is now " . $final_status_to_use . ".";
+        $requestor_link = "track.php?track_id=" . urlencode($processed_id);
+    } elseif ($action === 'Accept') {
+        $requestor_message = "Your document " . $processed_id . " was processed by the " . $dept_role . " office and has advanced to the next routing stage.";
+        $requestor_link = "track.php?track_id=" . urlencode($processed_id);
+    } elseif ($action === 'Return') {
+        $requestor_message = "Your document " . $processed_id . " was returned by the " . $dept_role . " office. Click to view remarks and resubmit.";
+        $requestor_link = "resubmit.php?edit_id=" . urlencode($processed_id);
+    } else {
+        $requestor_message = "Your document " . $processed_id . " has been rejected by the " . $dept_role . " office. The workflow has been terminated.";
+        $requestor_link = "track.php?track_id=" . urlencode($processed_id);
+    }
+    if ($requestor_id < 1 || !create_notification($conn, $requestor_id, $requestor_message, $requestor_link)) {
+        throw new Exception("Failed to save the requestor notification.");
+    }
 
-        if ($next_row) {
-            $next_current_index = (int)$next_row['current_stage_index'];
-            $next_custom_workflow = json_decode($next_row['custom_workflow'], true) ?? [];
-            $next_workflow_type = $next_row['workflow_type'] ?? 'Approval';
-
-            // Determine the workflow array to use
-            $effective_workflow = !empty($next_custom_workflow) ? $next_custom_workflow : $doc_workflow;
-
-            $next_stage_idx_0 = $next_current_index - 1; // 0-based
-            $next_step = $effective_workflow[$next_stage_idx_0] ?? null;
-
-            if (!empty($next_step)) {
-                // If the next step is an account (ACCOUNT:<id>), notify only that user
-                if (is_string($next_step) && strpos($next_step, 'ACCOUNT:') === 0) {
-                    $acct_id = intval(substr($next_step, strlen('ACCOUNT:')));
-                    if ($acct_id > 0) {
-                        $notif_message = "Heads up! A document (" . $processed_id . ") has been routed to your account.";
-                        $notif_link = "queue.php";
-                        create_notification($conn, $acct_id, $notif_message, $notif_link);
-                    }
-                } else {
-                    // Otherwise, notify according to department rules (heads or everyone)
-                    $users_to_notify_stmt = prepare_notification_statement_for_department($conn, $next_step);
-                    if ($users_to_notify_stmt) {
-                        $users_to_notify_stmt->execute();
-                        $users_res = $users_to_notify_stmt->get_result();
-                        $signatory_notif_message = "Heads up! A document (" . $processed_id . ") is en route to your office.";
-                        $signatory_notif_link = "queue.php";
-                        while ($user_row = $users_res->fetch_assoc()) {
-                            create_notification($conn, $user_row['user_id'], $signatory_notif_message, $signatory_notif_link);
-                        }
-                        $users_to_notify_stmt->close();
-                    }
-                }
-            } else {
-                // No next step (could be final); if this was a Transfer and its destination was an account, ensure it's notified
-                if ($next_workflow_type === 'Transfer') {
-                    // For Transfers, the destination is stored in custom_workflow[0]
-                    $dest = $next_custom_workflow[0] ?? ($doc_workflow[0] ?? null);
-                    if (is_string($dest) && strpos($dest, 'ACCOUNT:') === 0) {
-                        $acct_id = intval(substr($dest, strlen('ACCOUNT:')));
-                        if ($acct_id > 0) {
-                            $notif_message = "Heads up! A document (" . $processed_id . ") has been sent to your account.";
-                            $notif_link = "queue.php";
-                            create_notification($conn, $acct_id, $notif_message, $notif_link);
-                        }
-                    }
-                }
-            }
+    if ($action === 'Accept' && !$is_final_stage) {
+        $next_step = $doc_workflow[(int)$voucher['current_stage_index']] ?? null;
+        if (!$next_step || notify_routing_stage(
+            $conn,
+            $next_step,
+            $requestor_id,
+            "Document " . $processed_id . " has been processed by " . $dept_role . " and is now routed to your stage.",
+            "queue.php?select_id=" . urlencode($processed_id)
+        ) < 1) {
+            throw new Exception("Failed to notify the next routing recipient.");
         }
-    } catch (Exception $e) {
-        // Non-fatal: log and continue (notification failures should not block the workflow)
-        error_log('Notification error in process_signature: ' . $e->getMessage());
     }
 
     // If all good, commit

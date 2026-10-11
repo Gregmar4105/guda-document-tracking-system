@@ -392,8 +392,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                 }
             }
             
-            $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow FROM vouchers WHERE voucher_code = ?");
-            // The previous line was redundant and overwritten. The correct statement is below.
+            $conn->begin_transaction();
             $verify_stmt = $conn->prepare("SELECT current_stage_index, custom_workflow, workflow_type FROM vouchers WHERE voucher_code = ? FOR UPDATE");
             $verify_stmt->bind_param("s", $processed_id); // ADDED: Bind parameter for the voucher_code
             $verify_stmt->execute();
@@ -492,6 +491,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                     $log_action = "Accepted";
                     
                     if ($verify_row['current_stage_index'] >= count($custom_workflow)) {
+                        $is_final_stage = true;
                         // This is the final stage. Get the custom final status text from the document type.
                         // We need to fetch the doc_type_id from the voucher itself to get its final_status_text
                         $doc_type_id_stmt = $conn->prepare("SELECT v.doc_type_id, dt.final_status_text FROM vouchers v LEFT JOIN document_types dt ON v.doc_type_id = dt.id WHERE v.voucher_code = ?");
@@ -509,57 +509,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
 
                         $upd_stmt = $conn->prepare("UPDATE vouchers SET status = ? WHERE voucher_code = ?");
                         $upd_stmt->bind_param("ss", $final_status_to_use, $processed_id);
-
-                        // Create notification for final approval
-                        $notif_message = "Good news! Your document " . $processed_id . " has been fully approved and is now " . $final_status_to_use . ".";
-                        $notif_link = "track.php?track_id=" . urlencode($processed_id);
-                        create_notification($conn, $requestor_id_for_notif, $notif_message, $notif_link);
                     } else {
+                        $is_final_stage = false;
                         $upd_stmt = $conn->prepare("UPDATE vouchers SET status = 'Processing', current_stage_index = current_stage_index + 1 WHERE voucher_code = ?"); // Increment stage
                         $upd_stmt->bind_param("s", $processed_id);
-
-                        // --- START: NOTIFY NEXT SIGNATORY ---
-                        // The next stage index is the current one (since we're about to increment it in the DB)
-                        $next_stage_index_0_based = $verify_row['current_stage_index']; 
-                        if (isset($custom_workflow[$next_stage_index_0_based])) {
-                            $next_dept = $custom_workflow[$next_stage_index_0_based];
-                            $users_to_notify_stmt = null;
-                            $account_user_id = 0;
-
-                            if (is_string($next_dept) && strpos($next_dept, 'ACCOUNT:') === 0) {
-                                $account_user_id = (int)substr($next_dept, strlen('ACCOUNT:'));
-                                if ($account_user_id > 0) {
-                                    $notif_message = "Heads up! Document " . $processed_id . " has been processed by " . $dept_role . " and is now en route to your account.";
-                                    create_notification($conn, $account_user_id, $notif_message, "queue.php?select_id=" . urlencode($processed_id));
-                                }
-                            } elseif ($next_dept === 'Department Head') {
-                                // Get the requestor's department to find the correct head
-                                $req_dept_stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
-                                $req_dept_stmt->bind_param("i", $requestor_id_for_notif);
-                                $req_dept_stmt->execute();
-                                $requestor_department = $req_dept_stmt->get_result()->fetch_assoc()['role'] ?? null;
-                                $req_dept_stmt->close();
-
-                                if ($requestor_department) {
-                                    // Notify only the head of the requestor's department
-                                    $users_to_notify_stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ? AND is_head = 1");
-                                    $users_to_notify_stmt->bind_param("s", $requestor_department);
-                                }
-                            } else {
-                                // Use the global helper function to get the correct notification statement.
-                                $users_to_notify_stmt = prepare_notification_statement_for_department($conn, $next_dept);
-                            }
-
-                            if ($users_to_notify_stmt) {
-                                $users_to_notify_stmt->execute();
-                                $users_res = $users_to_notify_stmt->get_result();
-                                $signatory_notif_message = "Heads up! Document " . $processed_id . " has been processed by " . $dept_role . " and is now en route to your office.";
-                                $signatory_notif_link = "queue.php";
-                                while ($user_row = $users_res->fetch_assoc()) { create_notification($conn, $user_row['user_id'], $signatory_notif_message, $signatory_notif_link); }
-                                $users_to_notify_stmt->close();
-                            }
-                        }
-                        // --- END: NOTIFY NEXT SIGNATORY ---
                     }
                 } elseif ($action == "Return") {
                     $new_status = "Returned";
@@ -567,38 +520,76 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                     
                     $upd_stmt = $conn->prepare("UPDATE vouchers SET status = ? WHERE voucher_code = ?");
                     $upd_stmt->bind_param("ss", $new_status, $processed_id);
-
-                    // Create notification for returned document
-                    $notif_message = "Your document " . $processed_id . " was returned by the " . $dept_role . " office. Click to view remarks and resubmit.";
-                    $notif_link = "resubmit.php?edit_id=" . urlencode($processed_id);
-                    create_notification($conn, $requestor_id_for_notif, $notif_message, $notif_link);
                 } elseif ($action == "Decline") { // New 'Decline' action
                     $new_status = "Rejected"; // 'Rejected' is the status for a permanent decline
                     $log_action = "DECLINED";
                     
                     $upd_stmt = $conn->prepare("UPDATE vouchers SET status = ? WHERE voucher_code = ?");
                     $upd_stmt->bind_param("ss", $new_status, $processed_id);
-
-                    // Create notification for rejected document
-                    $notif_message = "Your document " . $processed_id . " has been rejected by the " . $dept_role . " office. The workflow has been terminated.";
-                    $notif_link = "track.php?track_id=" . urlencode($processed_id);
-                    create_notification($conn, $requestor_id_for_notif, $notif_message, $notif_link);
                 }
                 
                 if ($upd_stmt->execute()) {
                     // Insert the final action log. This stamps the exact TIME OUT.
                     $log_stmt = $conn->prepare("INSERT INTO audit_logs (voucher_code, department, action_taken, remarks, processed_by_user_id) VALUES (?, ?, ?, ?, ?)");
-                    if ($log_stmt) {
+                    if (!$log_stmt) {
+                        $search_error = "Database Error: Could not prepare the action audit log.";
+                    } else {
                         $log_stmt->bind_param("ssssi", $processed_id, $dept_role, $log_action, $remarks, $user_id);
-                        $log_stmt->execute();
+                        if (!$log_stmt->execute()) {
+                            $search_error = "Database Error: Could not record the action audit log.";
+                        }
                         $log_stmt->close();
                     }
-                    $success_msg = "<strong>TIME-OUT RECORDED:</strong> Voucher has been successfully processed as <strong>" . strtoupper($action) . "</strong>.";
-                    header("Refresh: 2; URL=queue.php"); 
+
+                    if (empty($search_error)) {
+                        $track_link = "track.php?track_id=" . urlencode($processed_id);
+                        if ($action === "Accept" && $is_final_stage) {
+                            $requestor_message = "Good news! Your document " . $processed_id . " has been fully approved and is now " . $final_status_to_use . ".";
+                            $requestor_link = $track_link;
+                        } elseif ($action === "Accept") {
+                            $requestor_message = "Your document " . $processed_id . " was processed by the " . $dept_role . " office and has advanced to the next routing stage.";
+                            $requestor_link = $track_link;
+                        } elseif ($action === "Return") {
+                            $requestor_message = "Your document " . $processed_id . " was returned by the " . $dept_role . " office. Click to view remarks and resubmit.";
+                            $requestor_link = "resubmit.php?edit_id=" . urlencode($processed_id);
+                        } else {
+                            $requestor_message = "Your document " . $processed_id . " has been rejected by the " . $dept_role . " office. The workflow has been terminated.";
+                            $requestor_link = $track_link;
+                        }
+
+                        if ((int)$requestor_id_for_notif < 1 || !create_notification($conn, $requestor_id_for_notif, $requestor_message, $requestor_link)) {
+                            $search_error = "Database Error: The requestor notification could not be saved.";
+                        }
+                    }
+
+                    if (empty($search_error) && $action === "Accept" && !$is_final_stage) {
+                        $next_dept = $custom_workflow[$current_stage_0_indexed + 1] ?? null;
+                        if (!$next_dept || notify_routing_stage(
+                            $conn,
+                            $next_dept,
+                            $requestor_id_for_notif,
+                            "Document " . $processed_id . " has been processed by " . $dept_role . " and is now routed to your stage.",
+                            "queue.php?select_id=" . urlencode($processed_id)
+                        ) < 1) {
+                            $search_error = "Database Error: The next routing recipient could not be notified.";
+                        }
+                    }
+
+                    if (empty($search_error)) {
+                        $conn->commit();
+                        $success_msg = "<strong>TIME-OUT RECORDED:</strong> Voucher has been successfully processed as <strong>" . strtoupper($action) . "</strong>.";
+                        header("Refresh: 2; URL=queue.php");
+                    } else {
+                        $conn->rollback();
+                    }
                 } else {
                     $search_error = "Database Error: Could not update voucher.";
+                    $conn->rollback();
                 }
                 $upd_stmt->close();
+            }
+            if (!empty($search_error)) {
+                $conn->rollback();
             }
             $voucher_found = null; 
         }

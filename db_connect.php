@@ -84,11 +84,123 @@ function calculateARTADeadline($submission_date, $arta_level, $conn) {
  * @param string $link The URL the notification should link to.
  */
 function create_notification($conn, $user_id, $message, $link = '#') {
-    if (!$conn || empty($user_id) || empty($message)) return;
+    $user_id = (int)$user_id;
+    if (!$conn || $user_id < 1 || trim((string)$message) === '') {
+        return false;
+    }
     $stmt = $conn->prepare("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)");
+    if (!$stmt) {
+        error_log('Notification insert preparation failed: ' . $conn->error);
+        return false;
+    }
+    $message = (string)$message;
+    $link = (string)$link;
     $stmt->bind_param("iss", $user_id, $message, $link);
-    $stmt->execute();
+    $success = $stmt->execute();
+    if (!$success) {
+        error_log('Notification insert failed for user ' . $user_id . ': ' . $stmt->error);
+    }
     $stmt->close();
+    return $success;
+}
+
+/**
+ * Returns the users assigned to a workflow stage for notification delivery.
+ *
+ * @param mysqli $conn
+ * @param string $stage
+ * @param int|null $requestor_id
+ * @return array<int>
+ */
+function get_notification_recipients_for_route($conn, $stage, $requestor_id = null) {
+    if (!$conn || !is_string($stage) || trim($stage) === '') {
+        return [];
+    }
+
+    $stage = trim($stage);
+    if (preg_match('/^ACCOUNT:(\d+)$/i', $stage, $account_match)) {
+        $user_id = (int)$account_match[1];
+        return $user_id > 0 ? [$user_id] : [];
+    }
+
+    if ($stage === 'Department Head') {
+        $requestor_id = (int)$requestor_id;
+        if ($requestor_id < 1) {
+            return [];
+        }
+        $stmt = $conn->prepare('SELECT role FROM users WHERE user_id = ? LIMIT 1');
+        if (!$stmt) {
+            error_log('Could not prepare requestor department lookup for notification: ' . $conn->error);
+            return [];
+        }
+        $stmt->bind_param('i', $requestor_id);
+        if (!$stmt->execute()) {
+            error_log('Could not load requestor department for notification: ' . $stmt->error);
+            $stmt->close();
+            return [];
+        }
+        $department = $stmt->get_result()->fetch_assoc()['role'] ?? null;
+        $stmt->close();
+        if (!$department) {
+            return [];
+        }
+        $stmt = $conn->prepare('SELECT user_id FROM users WHERE role = ? AND is_head = 1');
+        if (!$stmt) {
+            error_log('Could not prepare department-head notification lookup: ' . $conn->error);
+            return [];
+        }
+        $stmt->bind_param('s', $department);
+    } else {
+        $stmt = prepare_notification_statement_for_department($conn, $stage);
+        if (!$stmt) {
+            error_log('Could not prepare routing notification lookup for stage "' . $stage . '".');
+            return [];
+        }
+    }
+
+    if (!$stmt->execute()) {
+        error_log('Could not load routing notification recipients for stage "' . $stage . '": ' . $stmt->error);
+        $stmt->close();
+        return [];
+    }
+    $result = $stmt->get_result();
+    $recipients = [];
+    while ($row = $result->fetch_assoc()) {
+        $recipient_id = (int)($row['user_id'] ?? 0);
+        if ($recipient_id > 0) {
+            $recipients[$recipient_id] = $recipient_id;
+        }
+    }
+    $stmt->close();
+    return array_values($recipients);
+}
+
+/**
+ * Notifies all users assigned to a workflow stage without sending duplicates.
+ *
+ * @param mysqli $conn
+ * @param string $stage
+ * @param int|null $requestor_id
+ * @param string $message
+ * @param string $link
+ * @param array<int> $exclude_user_ids
+ * @return int Number of notifications successfully created.
+ */
+function notify_routing_stage($conn, $stage, $requestor_id, $message, $link, $exclude_user_ids = []) {
+    $excluded = array_fill_keys(array_map('intval', $exclude_user_ids), true);
+    $sent = 0;
+    $failed = false;
+    foreach (get_notification_recipients_for_route($conn, $stage, $requestor_id) as $recipient_id) {
+        if (isset($excluded[$recipient_id])) {
+            continue;
+        }
+        if (create_notification($conn, $recipient_id, $message, $link)) {
+            $sent++;
+        } else {
+            $failed = true;
+        }
+    }
+    return $failed ? 0 : $sent;
 }
 
 /**
@@ -109,19 +221,32 @@ function prepare_notification_statement_for_department($conn, $department) {
         $dept_name = trim($matches[1]);
         // Notify only the head of the specified department.
         $stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ? AND is_head = 1");
+        if (!$stmt) {
+            error_log('Could not prepare department-head notification statement: ' . $conn->error);
+            return null;
+        }
         $stmt->bind_param("s", $dept_name);
         return $stmt;
     }
 
     if ($dept_for_query === 'Human Resources') { // This remains for the specific 'Human Resources' role name
         // HR is a special case; only notify the department head. This is a fallback.
-        return $conn->prepare("SELECT user_id FROM users WHERE role = 'Human Resources' AND is_head = 1");
+        $stmt = $conn->prepare("SELECT user_id FROM users WHERE role = 'Human Resources' AND is_head = 1");
     } else {
         // For all other departments, notify all users.
         $stmt = $conn->prepare("SELECT user_id FROM users WHERE role = ?");
+        if (!$stmt) {
+            error_log('Could not prepare department notification statement: ' . $conn->error);
+            return null;
+        }
         $stmt->bind_param("s", $dept_for_query);
         return $stmt;
     }
+    if (!$stmt) {
+        error_log('Could not prepare Human Resources notification statement: ' . $conn->error);
+        return null;
+    }
+    return $stmt;
 }
 
 /**

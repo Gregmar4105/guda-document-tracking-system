@@ -456,7 +456,7 @@ $charter_documents = [
     [
         'name' => 'Procurement through Direct Contracting',
         'arta_level' => 'Complex',
-        'duration' => '12 days, 5 minutes',
+        'duration' => '12 Days, 5 Minutes total',
         'requirements' => [
             'Requisition and Issue Slip (2 original copies)',
             'Purchase Request (2 original copies)',
@@ -465,18 +465,18 @@ $charter_documents = [
         ],
         'workflow' => [
             'Bids and Awards Committee',
-            'Bids and Awards Committee (Head)',
-            'Office of the President (Head)',
+            'Bids and Awards Committee',
+            'Office of the President',
             'Procurement Unit',
             'Bids and Awards Committee',
-            'Office of the President (Head)',
-            'Procurement Unit (Head)'
+            'Office of the President',
+            'Procurement Unit'
         ]
     ],
     [
         'name' => 'Procurement through Small Value Procurement',
         'arta_level' => 'Complex',
-        'duration' => '14 days, 5 minutes',
+        'duration' => '14 Days, 5 Minutes total',
         'requirements' => [
             'Requisition and Issue Slip (2 original copies)',
             'Purchase Request (2 original copies)',
@@ -485,31 +485,32 @@ $charter_documents = [
         ],
         'workflow' => [
             'Bids and Awards Committee',
-            'Bids and Awards Committee (Head)',
-            'Office of the President (Head)',
             'Bids and Awards Committee',
+            'Bids and Awards Committee',
+            'Bids and Awards Committee',
+            'Office of the President',
             'Procurement Unit',
-            'Bids and Awards Committee (Head)',
-            'Office of the President (Head)',
-            'Procurement Unit (Head)'
+            'Procurement Unit'
         ]
     ],
     [
         'name' => 'Issuance of Bidding Document to Prospective Bidders',
         'arta_level' => 'Simple',
-        'duration' => '35 minutes',
-        'requirements' => ['Official Receipt (1 original copy)'],
+        'duration' => '35 Minutes total',
+        'requirements' => [
+            'Official Receipt (1 original copy)'
+        ],
         'workflow' => [
-            'Cash Services – Collecting Office',
+            'Cash Services - Collecting Office',
             'Bids and Awards Committee',
-            'Cash Services – Collecting Office',
+            'Cash Services - Collecting Office',
             'Bids and Awards Committee'
         ]
     ],
     [
         'name' => 'Procurement Through Public Bidding',
         'arta_level' => 'Highly Technical',
-        'duration' => '13 days, 10 minutes',
+        'duration' => '13 Days, 10 Minutes total',
         'requirements' => [
             'Requisition and Issue Slip (2 original copies)',
             'Purchase Request (2 original copies)',
@@ -518,19 +519,19 @@ $charter_documents = [
         ],
         'workflow' => [
             'Bids and Awards Committee',
-            'Bids and Awards Committee (Head)',
-            'Procurement Unit',
             'Bids and Awards Committee',
-            'Bids and Awards Committee (Head)',
-            'Office of the President (Head)',
             'Bids and Awards Committee',
-            'Procurement Unit (Head)'
+            'Bids and Awards Committee',
+            'Bids and Awards Committee',
+            'Office of the President',
+            'Bids and Awards Committee',
+            'Procurement Unit'
         ]
     ],
     [
         'name' => 'Process of Purchase Order or Work Order - Small Value Procurement',
         'arta_level' => 'Highly Technical',
-        'duration' => '8 days, 6 hours, 55 minutes',
+        'duration' => '8 Days, 6 Hours, 55 Minutes total',
         'requirements' => [
             'Requisition Inspection Slip and Purchase Request Form (3 original copies)',
             'Certificate of Funds Availability (1 original copy)',
@@ -541,24 +542,24 @@ $charter_documents = [
             'Purchase Order (P.O.) or Work Order (W.O.) (4 original copies)'
         ],
         'workflow' => [
-            'Procurement Unit (Head)',
-            'Budget Office (Head)',
-            'Bids and Awards Committee',
-            'Bids and Awards Committee (Head)',
-            'Office of the President (Head)',
             'Procurement Unit',
-            'Accounting Office (Head)',
-            'Office of the President (Head)',
-            'Procurement Unit (Head)'
+            'Budget Office',
+            'Bids and Awards Committee',
+            'Office of the President',
+            'Bids and Awards Committee',
+            'Procurement Unit',
+            'Accounting Office',
+            'Office of the President',
+            'Procurement Unit'
         ]
     ],
     [
         'name' => 'Request for Leave of Absence',
         'arta_level' => 'Simple',
-        'duration' => '1 day, 35 minutes',
+        'duration' => '1 Day, 35 Minutes total',
         'requirements' => [
             'HRM Form No. 19 (CS Form No. 6 rev. 2020) (3 original copies)',
-            'Refer to instructions and requirements at the back of HRM Form No. 19'
+            'Refer to Instructions and requirements at the back of HRM Form No. 19'
         ],
         'workflow' => [
             'Human Resource Management Services Division',

@@ -383,6 +383,229 @@ applyMigration('add_force_password_change_feature_20240716', [
     "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `password_reset_timestamp`"
 ], $conn);
 
+$charter_departments = [
+    'Accounting Office',
+    'Admission Office',
+    'Auxiliary Services and Resource Generation Office',
+    'Bids and Awards Committee',
+    'Budget Office',
+    'Cash Services – Collecting Office',
+    'College and Board Secretary\'s Office',
+    'College Library',
+    'Community Extension Services',
+    'Cultural Affairs Unit',
+    'General Services Department',
+    'Guidance Services Unit',
+    'Human Resource Management Services Division',
+    'Institute of Computer Studies (ICS) Office',
+    'Institute of Engineering and Technology (IET) Office',
+    'Institute of Graduate Studies (IGS) Office',
+    'Institute of Liberal Arts and Sciences (ILAS) Office',
+    'Management Information System Office',
+    'Medical Unit',
+    'National Service Training Program (NSTP)',
+    'Office of Student Affairs',
+    'Office of the President',
+    'PE and Sports Development Unit',
+    'Procurement Unit',
+    'Quality Assurance Center',
+    'Records Office',
+    'Registrar\'s Office',
+    'Research and Development Center',
+    'Supply and Property Office',
+    'VP for Admin & Finance',
+    'VPAA',
+    'VPAF – Vice President for Administration and Finance'
+];
+
+$charter_job_titles = [
+    'Accounting Office' => ['Accountant', 'Head', 'Staff'],
+    'Admission Office' => ['Admissions Officer', 'Head', 'Staff'],
+    'Auxiliary Services and Resource Generation Office' => ['Head', 'Officer', 'Staff'],
+    'Bids and Awards Committee' => ['Committee Member', 'Head', 'Staff'],
+    'Budget Office' => ['Budget Officer', 'Head', 'Staff'],
+    'Cash Services – Collecting Office' => ['Cashier', 'Head', 'Staff'],
+    'College and Board Secretary\'s Office' => ['Board Secretary', 'Head', 'Staff'],
+    'College Library' => ['Head', 'Librarian', 'Staff'],
+    'Community Extension Services' => ['Extension Coordinator', 'Head', 'Staff'],
+    'Cultural Affairs Unit' => ['Coordinator', 'Head', 'Staff'],
+    'General Services Department' => ['Head', 'Services Officer', 'Staff'],
+    'Guidance Services Unit' => ['Guidance Counselor', 'Head', 'Staff'],
+    'Human Resource Management Services Division' => ['Head', 'HR Officer', 'Staff'],
+    'Institute of Computer Studies (ICS) Office' => ['Dean', 'Head', 'Processor', 'Proff', 'Staff'],
+    'Institute of Engineering and Technology (IET) Office' => ['Dean', 'Head', 'Processor', 'Staff'],
+    'Institute of Graduate Studies (IGS) Office' => ['Dean', 'Head', 'Processor', 'Staff'],
+    'Institute of Liberal Arts and Sciences (ILAS) Office' => ['Dean', 'Head', 'Processor', 'Staff'],
+    'Management Information System Office' => ['Head', 'Staff', 'System Administrator'],
+    'Medical Unit' => ['Head', 'Nurse', 'Staff'],
+    'National Service Training Program (NSTP)' => ['Head', 'NSTP Coordinator', 'Staff'],
+    'Office of Student Affairs' => ['Head', 'Staff', 'Student Affairs Coordinator'],
+    'PE and Sports Development Unit' => ['Coach', 'Head', 'Staff'],
+    'Procurement Unit' => ['Head', 'Procurement Officer', 'Staff'],
+    'Quality Assurance Center' => ['Head', 'QA Officer', 'Staff'],
+    'Records Office' => ['Head', 'Records Officer', 'Staff'],
+    'Registrar\'s Office' => ['Head', 'Registrar Staff', 'Staff'],
+    'Research and Development Center' => ['Head', 'Researcher', 'Staff'],
+    'Supply and Property Office' => ['Head', 'Property Custodian', 'Staff'],
+    'VP for Admin & Finance' => ['VPAF HEAD'],
+    'VPAA' => ['Staff', 'Vice President'],
+    'VPAF – Vice President for Administration and Finance' => ['Staff', 'Vice President']
+];
+
+$charter_documents = [
+    [
+        'name' => 'Procurement through Direct Contracting',
+        'arta_level' => 'Complex',
+        'duration' => '12 days, 5 minutes',
+        'requirements' => [
+            'Requisition and Issue Slip (2 original copies)',
+            'Purchase Request (2 original copies)',
+            'Certificate of Budget Availability (1 original copy)',
+            'Certificate of Exclusive Distributorship (1 certified true copy)'
+        ],
+        'workflow' => [
+            'Bids and Awards Committee',
+            'Bids and Awards Committee (Head)',
+            'Office of the President (Head)',
+            'Procurement Unit',
+            'Bids and Awards Committee',
+            'Office of the President (Head)',
+            'Procurement Unit (Head)'
+        ]
+    ],
+    [
+        'name' => 'Procurement through Small Value Procurement',
+        'arta_level' => 'Complex',
+        'duration' => '14 days, 5 minutes',
+        'requirements' => [
+            'Requisition and Issue Slip (2 original copies)',
+            'Purchase Request (2 original copies)',
+            'Certificate of Budget Availability (1 original copy)',
+            'Technical Specifications for Goods, Terms of Reference for Consulting Services, Scope of Work, Layout or Drawing, and Scope of Work for Infrastructure Projects (1 original copy)'
+        ],
+        'workflow' => [
+            'Bids and Awards Committee',
+            'Bids and Awards Committee (Head)',
+            'Office of the President (Head)',
+            'Bids and Awards Committee',
+            'Procurement Unit',
+            'Bids and Awards Committee (Head)',
+            'Office of the President (Head)',
+            'Procurement Unit (Head)'
+        ]
+    ],
+    [
+        'name' => 'Issuance of Bidding Document to Prospective Bidders',
+        'arta_level' => 'Simple',
+        'duration' => '35 minutes',
+        'requirements' => ['Official Receipt (1 original copy)'],
+        'workflow' => [
+            'Cash Services – Collecting Office',
+            'Bids and Awards Committee',
+            'Cash Services – Collecting Office',
+            'Bids and Awards Committee'
+        ]
+    ],
+    [
+        'name' => 'Procurement Through Public Bidding',
+        'arta_level' => 'Highly Technical',
+        'duration' => '13 days, 10 minutes',
+        'requirements' => [
+            'Requisition and Issue Slip (2 original copies)',
+            'Purchase Request (2 original copies)',
+            'Certificate of Budget Availability (1 original copy)',
+            'Technical Specifications for Goods / Terms of Reference for Consultancy Services / Scope of Work, Layout or Drawing, Bill of Quantities for Infrastructure (1 original copy)'
+        ],
+        'workflow' => [
+            'Bids and Awards Committee',
+            'Bids and Awards Committee (Head)',
+            'Procurement Unit',
+            'Bids and Awards Committee',
+            'Bids and Awards Committee (Head)',
+            'Office of the President (Head)',
+            'Bids and Awards Committee',
+            'Procurement Unit (Head)'
+        ]
+    ],
+    [
+        'name' => 'Process of Purchase Order or Work Order - Small Value Procurement',
+        'arta_level' => 'Highly Technical',
+        'duration' => '8 days, 6 hours, 55 minutes',
+        'requirements' => [
+            'Requisition Inspection Slip and Purchase Request Form (3 original copies)',
+            'Certificate of Funds Availability (1 original copy)',
+            'BAC Resolution (1 original copy)',
+            'Abstract of Canvass Form (4 original copies)',
+            'Reasonableness of Price Form (1 original copy)',
+            'Emergency Purchase (1 original copy)',
+            'Purchase Order (P.O.) or Work Order (W.O.) (4 original copies)'
+        ],
+        'workflow' => [
+            'Procurement Unit (Head)',
+            'Budget Office (Head)',
+            'Bids and Awards Committee',
+            'Bids and Awards Committee (Head)',
+            'Office of the President (Head)',
+            'Procurement Unit',
+            'Accounting Office (Head)',
+            'Office of the President (Head)',
+            'Procurement Unit (Head)'
+        ]
+    ],
+    [
+        'name' => 'Request for Leave of Absence',
+        'arta_level' => 'Simple',
+        'duration' => '1 day, 35 minutes',
+        'requirements' => [
+            'HRM Form No. 19 (CS Form No. 6 rev. 2020) (3 original copies)',
+            'Refer to instructions and requirements at the back of HRM Form No. 19'
+        ],
+        'workflow' => [
+            'Human Resource Management Services Division',
+            'VP for Admin & Finance',
+            'Human Resource Management Services Division'
+        ]
+    ]
+];
+
+$charter_queries = [
+    "INSERT IGNORE INTO `arta_levels` (`level_name`, `processing_days`) VALUES ('Simple', 3), ('Complex', 7), ('Highly Technical', 20)",
+    "UPDATE `arta_levels` SET `processing_days` = CASE `level_name` WHEN 'Simple' THEN 3 WHEN 'Complex' THEN 7 WHEN 'Highly Technical' THEN 20 END WHERE `level_name` IN ('Simple', 'Complex', 'Highly Technical')"
+];
+foreach ($charter_departments as $department_name) {
+    $department_sql = $conn->real_escape_string($department_name);
+    $charter_queries[] = "INSERT INTO `departments` (`name`, `is_signatory`, `is_active`) SELECT '{$department_sql}', 1, 1 WHERE NOT EXISTS (SELECT 1 FROM `departments` WHERE `name` = '{$department_sql}')";
+    $charter_queries[] = "UPDATE `departments` SET `is_signatory` = 1, `is_active` = 1 WHERE `name` = '{$department_sql}'";
+}
+foreach ($charter_job_titles as $department_name => $title_names) {
+    $department_sql = $conn->real_escape_string($department_name);
+    foreach ($title_names as $title_name) {
+        $title_sql = $conn->real_escape_string($title_name);
+        $charter_queries[] = "INSERT INTO `job_titles` (`department_name`, `title_name`) SELECT '{$department_sql}', '{$title_sql}' WHERE NOT EXISTS (SELECT 1 FROM `job_titles` WHERE `department_name` = '{$department_sql}' AND `title_name` = '{$title_sql}')";
+    }
+}
+foreach ($charter_documents as $document) {
+    $name_sql = $conn->real_escape_string($document['name']);
+    $level_sql = $conn->real_escape_string($document['arta_level']);
+    $requirements_json = json_encode($document['requirements'], JSON_UNESCAPED_UNICODE);
+    $workflow_json = json_encode($document['workflow'], JSON_UNESCAPED_UNICODE);
+    if ($requirements_json === false || $workflow_json === false) {
+        throw new RuntimeException('Could not encode citizen charter document template data.');
+    }
+    $requirements_sql = $conn->real_escape_string($requirements_json);
+    $workflow_sql = $conn->real_escape_string($workflow_json);
+    $description_text = 'Citizen\'s Charter stated processing time: ' . $document['duration'] . '. The system ARTA deadline is ' . $document['arta_level'] . ' ('
+        . ($document['arta_level'] === 'Simple' ? '3' : ($document['arta_level'] === 'Complex' ? '7' : '20'))
+        . ' business days). The default route uses the offices configured in the Departments & Job Titles list.';
+    if ($document['name'] === 'Request for Leave of Absence') {
+        $description_text .= ' The published charter routes Admin leave to VP for Admin & Finance and Faculty leave to VPAA; this shared template defaults to VP for Admin & Finance and must be adjusted to VPAA for Faculty requests.';
+    }
+    $description_sql = $conn->real_escape_string($description_text);
+    $charter_queries[] = "UPDATE `document_types` SET `category` = 'General', `arta_level` = '{$level_sql}', `workflow_type` = 'Approval', `requirements` = '{$requirements_sql}', `default_workflow` = '{$workflow_sql}', `description` = '{$description_sql}', `is_active` = 1 WHERE `name` = '{$name_sql}'";
+    $charter_queries[] = "INSERT INTO `document_types` (`name`, `category`, `arta_level`, `workflow_type`, `requirements`, `default_workflow`, `description`, `is_active`, `is_system_default`) SELECT '{$name_sql}', 'General', '{$level_sql}', 'Approval', '{$requirements_sql}', '{$workflow_sql}', '{$description_sql}', 1, 0 WHERE NOT EXISTS (SELECT 1 FROM `document_types` WHERE `name` = '{$name_sql}')";
+}
+applyMigration('add_citizens_charter_document_types_and_offices_20261012', $charter_queries, $conn);
+
 $conn->close();
 echo "<p>Migration process complete.</p>";
 ?>

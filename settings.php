@@ -198,9 +198,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $new_workflow_type = $_POST['doc_workflow_type'];
         $new_final_status = trim($_POST['doc_final_status'] ?? '');
         $new_workflow_json = $_POST['doc_type_workflow'];
+        $requirements_text = trim($_POST['requirements'] ?? '');
+        $requirements_array = !empty($requirements_text) ? array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $requirements_text)), static fn($value) => $value !== '')) : [];
+        $requirements_json = json_encode($requirements_array);
 
-        $insert_type_stmt = $conn->prepare("INSERT INTO document_types (name, arta_level, workflow_type, final_status_text, default_workflow, is_active) VALUES (?, ?, ?, ?, ?, 1)");
-        $insert_type_stmt->bind_param("sssss", $new_name, $new_arta, $new_workflow_type, $new_final_status, $new_workflow_json);
+        $insert_type_stmt = $conn->prepare("INSERT INTO document_types (name, arta_level, workflow_type, final_status_text, default_workflow, requirements, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+        $insert_type_stmt->bind_param("ssssss", $new_name, $new_arta, $new_workflow_type, $new_final_status, $new_workflow_json, $requirements_json);
         if ($insert_type_stmt->execute()) {
             $success_msg = "Document Type '$new_name' created successfully.";
         } else {
@@ -225,9 +228,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $type_workflow_type = $_POST['doc_workflow_type'];
         $type_final_status = trim($_POST['doc_final_status'] ?? '');
         $type_workflow_json = $_POST['doc_type_workflow'];
+        $requirements_text = trim($_POST['requirements'] ?? '');
+        $requirements_array = !empty($requirements_text) ? array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $requirements_text)), static fn($value) => $value !== '')) : [];
+        $requirements_json = json_encode($requirements_array);
 
-        $update_type_stmt = $conn->prepare("UPDATE document_types SET name = ?, arta_level = ?, workflow_type = ?, final_status_text = ?, default_workflow = ? WHERE id = ?");
-        $update_type_stmt->bind_param("sssssi", $type_name, $type_arta, $type_workflow_type, $type_final_status, $type_workflow_json, $type_id);
+        $update_type_stmt = $conn->prepare("UPDATE document_types SET name = ?, arta_level = ?, workflow_type = ?, final_status_text = ?, default_workflow = ?, requirements = ? WHERE id = ?");
+        $update_type_stmt->bind_param("ssssssi", $type_name, $type_arta, $type_workflow_type, $type_final_status, $type_workflow_json, $requirements_json, $type_id);
         if ($update_type_stmt->execute()) {
             $success_msg = "Document Type '$type_name' updated successfully.";
         } else {
@@ -974,6 +980,10 @@ foreach ($all_departments as $key => $dept) {
                                         <label>Final Status Text (e.g., "Leave Approved", "Ready for Release")</label>
                                         <input type="text" name="doc_final_status" placeholder="Leave empty for default 'Ready for Release'">
                                     </div>
+                                    <div class="input-group" style="grid-column: span 3;">
+                                        <label>Requirements Checklist</label>
+                                        <textarea name="requirements" rows="4" placeholder="Enter one requirement per line..."></textarea>
+                                    </div>
                                     </div>
                                     <div class="input-group">
                                         <label>Default Routing Sequence</label>
@@ -1005,6 +1015,7 @@ foreach ($all_departments as $key => $dept) {
                                 </h4>
                                 <?php foreach($all_doc_types as $type):
                                     $workflow = json_decode($type['default_workflow'] ?? '[]', true);
+                                    $doc_requirements = json_decode($type['requirements'] ?? '[]', true);
                                 ?>
                                     <div class="doc-type-item" id="item-<?php echo $type['id']; ?>">
                                         <div class="display-view">
@@ -1013,6 +1024,11 @@ foreach ($all_departments as $key => $dept) {
                                                 <div class="doc-type-info">
                                                     <strong><?php echo htmlspecialchars(!empty($type['is_system_default']) && strcasecmp($type['name'], 'Financial Voucher') === 0 ? 'Disbursement Voucher' : $type['name']); ?></strong>
                                                     <small>ARTA: <?php echo $type['arta_level']; ?> | Type: <?php echo $type['workflow_type']; ?> | <?php echo !empty($type['is_approved']) ? 'Approved' : 'Pending admin approval'; ?></small>
+                                                    <?php if (!empty($doc_requirements)): ?>
+                                                        <ul class="workflow-list">
+                                                            <?php foreach($doc_requirements as $requirement): ?><li><?php echo htmlspecialchars($requirement); ?></li><?php endforeach; ?>
+                                                        </ul>
+                                                    <?php endif; ?>
                                                     <ul class="workflow-list">
                                                         <?php foreach($workflow as $step): ?><li><?php echo htmlspecialchars($format_workflow_step($step)); ?></li><?php endforeach; ?>
                                                     </ul>
@@ -1040,6 +1056,10 @@ foreach ($all_departments as $key => $dept) {
                                                         <option value="Approval" <?php if($type['workflow_type'] == 'Approval') echo 'selected'; ?>>Approval</option>
                                                         <option value="Transfer" <?php if($type['workflow_type'] == 'Transfer') echo 'selected'; ?>>Transfer</option>
                                                     </select>
+                                                </div>
+                                                <div class="input-group" style="margin-top: 15px;">
+                                                    <label>Requirements Checklist</label>
+                                                    <textarea name="requirements" rows="4"><?php echo htmlspecialchars(implode("\n", is_array($doc_requirements) ? $doc_requirements : [])); ?></textarea>
                                                 </div>
                                                 <div class="input-group" style="margin-top: 15px;">
                                                     <label>Default Routing Sequence</label>

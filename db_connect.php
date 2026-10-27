@@ -5,10 +5,11 @@
 date_default_timezone_set('Asia/Manila');
 
 // Read database configuration from environment variables with fallback to defaults
-$host = getenv('DB_HOST') ?: "lc1q06oqxhucdtxiejsvdf66";
-$db_user = getenv('DB_USER') ?: "mysql";
-$db_pass = getenv('DB_PASSWORD') ?: "guda-mysql";
-$db_name = getenv('DB_NAME') ?: "default";
+// Defaults match the bundled `db` service in docker-compose.yml; the password comes from DB_PASSWORD.
+$host = getenv('DB_HOST') ?: "db";
+$db_user = getenv('DB_USER') ?: "dts";
+$db_pass = getenv('DB_PASSWORD') ?: "";
+$db_name = getenv('DB_NAME') ?: "dts";
 $port = (int)(getenv('DB_PORT') ?: 3306);
 
 $conn = new mysqli($host, $db_user, $db_pass, $db_name, $port);

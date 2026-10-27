@@ -1,29 +1,73 @@
-version: '3.8'
+# Self-contained stack for Coolify: app + MariaDB + phpMyAdmin.
+#   App:        http://<host>:9400
+#   phpMyAdmin: http://<host>:9500
+#
+# Passwords use Coolify "magic" variables (SERVICE_PASSWORD_*). Coolify generates
+# them on the first deploy and shows them in the resource's Environment Variables
+# tab, so no secrets live in git:
+#   SERVICE_PASSWORD_DBROOT -> phpMyAdmin login for user "root"
+#   SERVICE_PASSWORD_DBAPP  -> phpMyAdmin login for user "dts" (the app's account)
 
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: docu_tracking_app
     restart: unless-stopped
     ports:
-      - "8000:8000"
-      - "80:80"
+      - "9400:80"
     environment:
-      - DATABASE_URL=mysql://mysql:guda-mysql@lc1q06oqxhucdtxiejsvdf66:3306/default
-      - DB_HOST=lc1q06oqxhucdtxiejsvdf66
+      - DB_HOST=db
       - DB_PORT=3306
-      - DB_USER=mysql
-      - DB_PASSWORD=guda-mysql
-      - DB_NAME=default
+      - DB_USER=dts
+      - DB_PASSWORD=${SERVICE_PASSWORD_DBAPP}
+      - DB_NAME=dts
       - DB_SSL=false
-      - APP_URL=http://localhost:8000
+      - APP_URL=http://localhost:9400
       - AUTO_MIGRATE=false
-    networks:
-      - coolify_net
+    depends_on:
+      - db
 
-networks:
-  coolify_net:
-    name: coolify
-    external: true
+  db:
+    build:
+      context: ./docker/mysql
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_DBROOT}
+      - MARIADB_DATABASE=dts
+      - MARIADB_USER=dts
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_DBAPP}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  phpmyadmin:
+    build:
+      context: https://github.com/Gregmar4105/phpmyadmin.git#main
+    restart: unless-stopped
+    ports:
+      - "9500:80"
+    environment:
+      - PMA_IS_HTTPS=false
+      - PMA_ARBITRARY=false
+      - PMA_BLOWFISH_SECRET=${SERVICE_PASSWORD_64_PMABLOWFISH}
+      - PMA_TITLE=GUDA DTS
+      - SERVER1_ENABLE=true
+      - SERVER1_VERBOSE=GUDA DTS MariaDB
+      - SERVER1_HOST=db
+      - SERVER1_PORT=3306
+      - SERVER1_AUTH_TYPE=cookie
+      - SERVER1_SSL=false
+      - SERVER1_PMADB=phpmyadmin
+      - SERVER1_CONTROLUSER=root
+      - SERVER1_CONTROLPASS=${SERVICE_PASSWORD_DBROOT}
+    depends_on:
+      - db
+
+volumes:
+  db_data:

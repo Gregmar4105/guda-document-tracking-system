@@ -27,6 +27,13 @@ try {
     $document_type_approval_schema_ready = false;
     error_log('Could not ensure document type approval column exists: ' . $error->getMessage());
 }
+$document_type_system_default_schema_ready = true;
+try {
+    ensureDocumentTypeSystemDefaultColumn($conn);
+} catch (Throwable $error) {
+    $document_type_system_default_schema_ready = false;
+    error_log('Could not ensure document type system default column exists: ' . $error->getMessage());
+}
 
 // Fetch signatory departments for the workflow builder
 $signatory_departments = [];
@@ -37,9 +44,12 @@ while ($dept_row = $depts_res->fetch_assoc()) {
 
 // Fetch document types for the dropdown
 $document_types = [];
+$system_default_select = $document_type_system_default_schema_ready
+    ? "CASE WHEN is_system_default = 1 OR name IN ('Disbursement Voucher', 'Financial Voucher') THEN 1 ELSE 0 END AS is_system_default"
+    : "CASE WHEN name IN ('Disbursement Voucher', 'Financial Voucher') THEN 1 ELSE 0 END AS is_system_default";
 $types_query = $document_type_approval_schema_ready
-    ? "SELECT id, name, is_system_default FROM document_types WHERE is_active = 1 AND is_approved = 1 ORDER BY name ASC"
-    : "SELECT id, name, is_system_default FROM document_types WHERE is_active = 1 ORDER BY name ASC";
+    ? "SELECT id, name, $system_default_select FROM document_types WHERE is_active = 1 AND is_approved = 1 ORDER BY name ASC"
+    : "SELECT id, name, $system_default_select FROM document_types WHERE is_active = 1 ORDER BY name ASC";
 $types_res = $conn->query($types_query);
 while ($type_row = $types_res->fetch_assoc()) { // Add arta_level to this fetch
     $document_types[] = $type_row;
@@ -63,7 +73,9 @@ while ($arta_row = $arta_res->fetch_assoc()) {
 
 // Get the ID of the default financial doc type
 $default_financial_doc_type_id = null;
-$fin_type_stmt = $conn->query("SELECT id FROM document_types WHERE is_system_default = 1 LIMIT 1");
+$fin_type_stmt = $document_type_system_default_schema_ready
+    ? $conn->query("SELECT id FROM document_types WHERE is_system_default = 1 OR name IN ('Disbursement Voucher', 'Financial Voucher') ORDER BY is_system_default DESC, CASE WHEN name = 'Disbursement Voucher' THEN 0 ELSE 1 END LIMIT 1")
+    : $conn->query("SELECT id FROM document_types WHERE name IN ('Disbursement Voucher', 'Financial Voucher') ORDER BY CASE WHEN name = 'Disbursement Voucher' THEN 0 ELSE 1 END LIMIT 1");
 if ($fin_type_stmt && $fin_type_row = $fin_type_stmt->fetch_assoc()) {
     $default_financial_doc_type_id = $fin_type_row['id'];
 }

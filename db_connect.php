@@ -30,6 +30,18 @@ function ensureDocumentTypeApprovalColumn($conn) {
     }
 }
 
+function ensureDocumentTypeSystemDefaultColumn($conn) {
+    $result = $conn->query("SHOW COLUMNS FROM `document_types` LIKE 'is_system_default'");
+    if (!$result) {
+        throw new RuntimeException('Could not check document type system default schema: ' . $conn->error);
+    }
+    if ($result->num_rows === 0) {
+        if (!$conn->query("ALTER TABLE `document_types` ADD COLUMN `is_system_default` TINYINT(1) NOT NULL DEFAULT 0")) {
+            throw new RuntimeException('Could not add document type system default column: ' . $conn->error);
+        }
+    }
+}
+
 /**
  * Calculates the ARTA deadline for a document, considering weekends and holidays.
  *

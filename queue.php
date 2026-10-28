@@ -64,16 +64,16 @@ if ($dept_role === 'MIS') {
             u.full_name as requestor_name,
             u.role as origin_office
         FROM vouchers v 
-        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?
+        INNER JOIN audit_logs al ON v.voucher_code COLLATE utf8mb4_general_ci = al.voucher_code COLLATE utf8mb4_general_ci AND al.action_taken = 'Scan-to-Receive' AND al.department = ? AND al.processed_by_user_id = ?
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
-        LEFT JOIN arta_levels al_arta ON al_arta.level_name = COALESCE(vt.arta_level, dt.arta_level)
+        LEFT JOIN arta_levels al_arta ON al_arta.level_name = (COALESCE(vt.arta_level, dt.arta_level) COLLATE utf8mb4_general_ci)
         WHERE
             v.status IN ('Pending Review', 'Processing', 'In Transit')
             AND NOT EXISTS (
                 SELECT 1 FROM audit_logs al2 
-                WHERE al2.voucher_code = v.voucher_code 
+                WHERE al2.voucher_code COLLATE utf8mb4_general_ci = v.voucher_code COLLATE utf8mb4_general_ci
                 AND al2.department = ?
                 AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
             )
@@ -94,7 +94,7 @@ if ($dept_role === 'MIS') {
             u.role as origin_office,
             al.log_id
         FROM vouchers v
-        INNER JOIN audit_logs al ON v.voucher_code = al.voucher_code
+        INNER JOIN audit_logs al ON v.voucher_code COLLATE utf8mb4_general_ci = al.voucher_code COLLATE utf8mb4_general_ci
             AND al.action_taken = 'Scan-to-Receive'
             AND (
                 (
@@ -110,7 +110,7 @@ if ($dept_role === 'MIS') {
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
-        LEFT JOIN arta_levels al_arta ON al_arta.level_name = COALESCE(vt.arta_level, dt.arta_level)
+        LEFT JOIN arta_levels al_arta ON al_arta.level_name = (COALESCE(vt.arta_level, dt.arta_level) COLLATE utf8mb4_general_ci)
         WHERE
             (
                 -- Case 1: Custom workflow step matches user's department
@@ -145,7 +145,7 @@ if ($dept_role === 'MIS') {
             AND v.status IN ('Pending Review', 'Processing', 'In Transit')
             AND NOT EXISTS (
                 SELECT 1 FROM audit_logs al2 
-                WHERE al2.voucher_code = v.voucher_code 
+                WHERE al2.voucher_code COLLATE utf8mb4_general_ci = v.voucher_code COLLATE utf8mb4_general_ci
                 AND al2.action_taken IN ('Accepted', 'RETURNED', 'DECLINED')
                 AND (
                     (
@@ -190,7 +190,7 @@ if (isset($_GET['select_id']) && !empty($_GET['select_id'])) {
         LEFT JOIN users u ON v.requestor_id = u.user_id
         LEFT JOIN document_types dt ON v.doc_type_id = dt.id
         LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id
-        LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level)
+        LEFT JOIN arta_levels al ON al.level_name = (COALESCE(vt.arta_level, dt.arta_level) COLLATE utf8mb4_general_ci)
         WHERE v.voucher_code = ?
     ");
     $v_stmt->bind_param("s", $select_id);

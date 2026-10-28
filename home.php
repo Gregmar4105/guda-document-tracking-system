@@ -473,7 +473,7 @@ if ($is_signatory) {
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
-            LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
+            LEFT JOIN arta_levels al ON al.level_name = (COALESCE(vt.arta_level, dt.arta_level) COLLATE utf8mb4_general_ci)
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.status IN ('Pending Review', 'Processing', 'In Transit') 
             AND v.arta_deadline IS NOT NULL";
@@ -546,7 +546,7 @@ if ($is_signatory) {
             FROM vouchers v 
             LEFT JOIN document_types dt ON v.doc_type_id = dt.id 
             LEFT JOIN voucher_types vt ON v.voucher_type_id = vt.id 
-            LEFT JOIN arta_levels al ON al.level_name = COALESCE(vt.arta_level, dt.arta_level) 
+            LEFT JOIN arta_levels al ON al.level_name = (COALESCE(vt.arta_level, dt.arta_level) COLLATE utf8mb4_general_ci)
             LEFT JOIN users u_req ON v.requestor_id = u_req.user_id
             WHERE v.requestor_id = ? 
             AND v.status IN ('Pending Review', 'Processing', 'In Transit') 

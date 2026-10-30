@@ -30,6 +30,13 @@ try {
     $document_type_system_default_schema_ready = false;
     error_log('Could not ensure document type system default column exists: ' . $error->getMessage());
 }
+$document_type_workflow_schema_ready = true;
+try {
+    ensureDocumentTypeWorkflowColumn($conn);
+} catch (Throwable $error) {
+    $document_type_workflow_schema_ready = false;
+    error_log('Could not ensure document type workflow column exists: ' . $error->getMessage());
+}
 
 // Fetch signatory departments for the workflow builder
 $signatory_departments = [];
@@ -67,9 +74,10 @@ $document_types = [];
 $system_default_select = $document_type_system_default_schema_ready
     ? "CASE WHEN is_system_default = 1 OR name IN ('Disbursement Voucher', 'Financial Voucher') THEN 1 ELSE 0 END AS is_system_default"
     : "CASE WHEN name IN ('Disbursement Voucher', 'Financial Voucher') THEN 1 ELSE 0 END AS is_system_default";
+$workflow_select = $document_type_workflow_schema_ready ? 'default_workflow' : 'NULL AS default_workflow';
 $types_query = $document_type_approval_schema_ready
-    ? "SELECT id, name, $system_default_select, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 AND is_approved = 1 ORDER BY name ASC"
-    : "SELECT id, name, $system_default_select, arta_level, default_workflow, workflow_type FROM document_types WHERE is_active = 1 ORDER BY name ASC";
+    ? "SELECT id, name, $system_default_select, arta_level, $workflow_select, workflow_type FROM document_types WHERE is_active = 1 AND is_approved = 1 ORDER BY name ASC"
+    : "SELECT id, name, $system_default_select, arta_level, $workflow_select, workflow_type FROM document_types WHERE is_active = 1 ORDER BY name ASC";
 $types_res = $conn->query($types_query);
 while ($type_row = $types_res->fetch_assoc()) {
     $document_types[] = $type_row;

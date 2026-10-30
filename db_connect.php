@@ -23,8 +23,20 @@ function ensureDocumentTypeApprovalColumn($conn) {
         throw new RuntimeException('Could not check document type approval schema: ' . $conn->error);
     }
     if ($result->num_rows === 0) {
-        if (!$conn->query("ALTER TABLE `document_types` ADD COLUMN `is_approved` TINYINT(1) NOT NULL DEFAULT 1 AFTER `is_active`")) {
+        if (!$conn->query("ALTER TABLE `document_types` ADD COLUMN `is_approved` TINYINT(1) NOT NULL DEFAULT 1")) {
             throw new RuntimeException('Could not add document type approval column: ' . $conn->error);
+        }
+    }
+}
+
+function ensureDocumentTypeWorkflowColumn($conn) {
+    $result = $conn->query("SHOW COLUMNS FROM `document_types` LIKE 'default_workflow'");
+    if (!$result) {
+        throw new RuntimeException('Could not check document type workflow schema: ' . $conn->error);
+    }
+    if ($result->num_rows === 0) {
+        if (!$conn->query("ALTER TABLE `document_types` ADD COLUMN `default_workflow` JSON NULL")) {
+            throw new RuntimeException('Could not add document type workflow column: ' . $conn->error);
         }
     }
 }

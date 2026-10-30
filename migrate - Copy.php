@@ -45,6 +45,11 @@ $conn->query("CREATE TABLE IF NOT EXISTS `migrations` (
   `migration_name` VARCHAR(255) NOT NULL UNIQUE,
   `applied_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )");
+try {
+    $conn->query("ALTER TABLE `migrations` MODIFY `id` INT NOT NULL AUTO_INCREMENT");
+} catch (Throwable $e) {
+    die("<p style='color: red;'>Could not repair migration tracking table: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . "</p>");
+}
 
 /**
  * Function to apply a migration
@@ -128,6 +133,18 @@ applyMigration('add_arta_levels_table_20240217', [
     "ALTER TABLE `document_types` CHANGE `arta_level` `arta_level` VARCHAR(50) NOT NULL DEFAULT 'Simple'"
 ], $conn);
 
+applyMigration('repair_legacy_document_and_voucher_type_schema_20261030', [
+    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `default_workflow` JSON NULL",
+    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1",
+    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_system_default` TINYINT(1) NOT NULL DEFAULT 0",
+    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_approved` TINYINT(1) NOT NULL DEFAULT 1",
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `default_workflow` JSON NULL",
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1",
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `min_amount` DECIMAL(15, 2) NULL DEFAULT NULL",
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `max_amount` DECIMAL(15, 2) NULL DEFAULT NULL",
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `fixed_amount` DECIMAL(15, 2) NULL DEFAULT NULL"
+], $conn);
+
 // Migration 4: Add system default financial doc type
 applyMigration('add_financial_doc_type_20240218', [
     "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_system_default` TINYINT(1) NOT NULL DEFAULT 0",
@@ -139,7 +156,7 @@ applyMigration('rename_financial_doc_type_to_disbursement_20261010', [
 ], $conn);
 
 applyMigration('add_document_type_approval_20261010', [
-    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_approved` TINYINT(1) NOT NULL DEFAULT 1 AFTER `is_active`"
+    "ALTER TABLE `document_types` ADD COLUMN IF NOT EXISTS `is_approved` TINYINT(1) NOT NULL DEFAULT 1"
 ], $conn);
 
 // Migration 5: Add ARTA level to financial voucher types
@@ -186,7 +203,7 @@ applyMigration('add_min_max_to_voucher_types_20240409', [
 ], $conn);
 
 applyMigration('add_fixed_amount_to_voucher_types_20261010', [
-    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `fixed_amount` DECIMAL(15, 2) NULL DEFAULT NULL AFTER `max_amount`"
+    "ALTER TABLE `voucher_types` ADD COLUMN IF NOT EXISTS `fixed_amount` DECIMAL(15, 2) NULL DEFAULT NULL"
 ], $conn);
 
 // Migration 12: Add general min/max amount guidelines for DSS
